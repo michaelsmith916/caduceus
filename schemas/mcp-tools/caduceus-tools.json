@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Caduceus Phase I MCP tool contract. The Go package pkg/schemas is the executable source of truth used by caduceus-mcp.",
+  "tools": [
+    "caduceus.list_workers",
+    "caduceus.get_worker",
+    "caduceus.run_remote_task",
+    "caduceus.run_remote_prompt",
+    "caduceus.list_tasks",
+    "caduceus.get_task_status",
+    "caduceus.get_task_result",
+    "caduceus.get_task_events",
+    "caduceus.get_task_artifacts",
+    "caduceus.cancel_task",
+    "caduceus.get_local_node_status",
+    "caduceus.get_local_config",
+    "caduceus.validate_task"
+  ],
+  "response": {
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "ok": { "const": true },
+          "data": { "type": "object" }
+        },
+        "required": ["ok", "data"]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "ok": { "const": false },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["ok", "error"]
+      }
+    ]
+  }
+}

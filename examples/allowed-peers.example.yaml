@@ -1,0 +1,6 @@
+peers:
+  - peer_id: "12D3KooWExamplePeerID"
+    name: "office-rtx5090"
+    trust_level: "trusted-lan"
+    allowed: true
+    notes: "Main Windows workstation"

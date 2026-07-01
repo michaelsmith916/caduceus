@@ -1,0 +1,42 @@
+node:
+  name: "office-laptop"
+  listen_addrs:
+    - "/ip4/0.0.0.0/tcp/0"
+  mdns_service_name: "_caduceus._tcp"
+  enable_mdns: true
+
+security:
+  p2p_key_hash: ""
+  p2p_key_path: "~/.config/caduceus/p2p.key"
+  allowed_peers_path: "~/.config/caduceus/allowed-peers.yaml"
+  require_allowlist: true
+  trust_level_default: "trusted-lan"
+
+worker:
+  enabled: true
+  labels: ["laptop"]
+  max_concurrent_tasks: 1
+  capabilities:
+    llm: true
+    streaming: true
+    artifacts: true
+    tools: ["run_remote_prompt"]
+
+openai:
+  base_url: "http://127.0.0.1:11434/v1"
+  api_key_env: "CADUCEUS_OPENAI_API_KEY"
+  default_model: "llama3.2"
+  timeout_seconds: 300
+
+control:
+  mode: "auto"
+  listen: ""
+  auth_token_path: ""
+
+logging:
+  level: "info"
+  json: false
+
+storage:
+  data_dir: ""
+  retention_days: 14

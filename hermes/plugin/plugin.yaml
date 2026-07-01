@@ -1,0 +1,7 @@
+name: caduceus
+version: 0.1.0
+description: Optional Hermes wrapper for the Caduceus MCP server.
+entrypoint: tools.py
+requires_mcp:
+  command: caduceus-mcp
+  args: []

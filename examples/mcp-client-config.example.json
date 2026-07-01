@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "caduceus": {
+      "command": "caduceus-mcp",
+      "args": []
+    }
+  }
+}

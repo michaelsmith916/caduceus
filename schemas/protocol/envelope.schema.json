@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Caduceus P2P Envelope",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "type": {
+      "type": "string",
+      "enum": ["worker_hello", "worker_status", "task_request", "task_accept", "task_event", "task_result", "task_cancel", "error"]
+    },
+    "id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "sender_peer_id": { "type": "string" },
+    "group_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "payload": { "type": "object" }
+  },
+  "required": ["version", "type", "id", "timestamp", "sender_peer_id", "group_hash", "payload"],
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+[Unit]
+Description=Caduceus LAN P2P worker daemon
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@BIN_DIR@/caduceusd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

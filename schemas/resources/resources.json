@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "resources": [
+    "caduceus://local/status",
+    "caduceus://local/config",
+    "caduceus://workers",
+    "caduceus://workers/{worker_id}",
+    "caduceus://tasks/{task_id}",
+    "caduceus://tasks/{task_id}/events",
+    "caduceus://tasks/{task_id}/artifacts/{artifact_id}"
+  ]
+}

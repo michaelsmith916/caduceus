@@ -1,0 +1,8 @@
+{
+  "worker_id": "auto",
+  "prompt": "Say hello from Caduceus in one sentence.",
+  "model": "llama3.2",
+  "stream": true,
+  "timeout_seconds": 300,
+  "trust_level": "trusted-lan"
+}
