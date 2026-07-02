@@ -69,7 +69,7 @@ Caduceus checks for Ollama first and does not install it without confirmation. T
 
 ```bash
 export CADUCEUS_OPENAI_BASE_URL="http://127.0.0.1:11434/v1"
-export CADUCEUS_DEFAULT_MODEL="llama3.2"
+export CADUCEUS_DEFAULT_MODEL="qwen3.5:9b"
 ```
 
 ## MCP

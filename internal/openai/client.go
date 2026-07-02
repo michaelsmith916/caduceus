@@ -30,7 +30,7 @@ func New(baseURL, apiKey, model string, timeout time.Duration) *Client {
 		baseURL = "http://127.0.0.1:11434/v1"
 	}
 	if strings.TrimSpace(model) == "" {
-		model = "llama3.2"
+		model = "qwen3.5:9b"
 	}
 	if timeout <= 0 {
 		timeout = 300 * time.Second

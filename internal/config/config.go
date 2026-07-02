@@ -14,7 +14,7 @@ import (
 
 const (
 	DefaultMDNSServiceName = "_caduceus._tcp"
-	DefaultModel           = "llama3.2"
+	DefaultModel           = "qwen3.5:9b"
 	DefaultOpenAIBaseURL   = "http://127.0.0.1:11434/v1"
 	DefaultControlPort     = "37391"
 )

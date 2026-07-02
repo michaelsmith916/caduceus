@@ -25,7 +25,7 @@ worker:
 openai:
   base_url: "http://127.0.0.1:11434/v1"
   api_key_env: "CADUCEUS_OPENAI_API_KEY"
-  default_model: "llama3.2"
+  default_model: "qwen3.5:9b"
   timeout_seconds: 300
 
 control:
