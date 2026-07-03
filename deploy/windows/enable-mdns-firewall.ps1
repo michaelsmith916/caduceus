@@ -6,7 +6,10 @@ param(
   [switch]$SkipWindowsFirewall,
   [switch]$SkipWSL,
   [switch]$AllowNativeDaemonTcp,
-  [string]$CaduceusExe = "$env:LOCALAPPDATA\Caduceus\bin\caduceusd.exe"
+  [string]$CaduceusExe = "$env:LOCALAPPDATA\Caduceus\bin\caduceusd.exe",
+  [switch]$AllowWSLDaemonTcp,
+  [ValidateRange(1, 65535)]
+  [int]$WSLDaemonTcpPort = 37392
 )
 
 $ErrorActionPreference = "Stop"
@@ -94,6 +97,20 @@ function Remove-HyperVRuleIfPresent {
 }
 
 function Add-WSLMDNSRules {
+  Add-WSLHyperVRules -RuleKind "mDNS" -TcpPort 0
+}
+
+function Add-WSLDaemonTCPRule {
+  Add-WSLHyperVRules -RuleKind "DaemonTCP" -TcpPort $WSLDaemonTcpPort
+}
+
+function Add-WSLHyperVRules {
+  param(
+    [ValidateSet("mDNS", "DaemonTCP")]
+    [string]$RuleKind,
+    [int]$TcpPort
+  )
+
   $newHyperVRule = Get-Command New-NetFirewallHyperVRule -ErrorAction SilentlyContinue
   $getHyperVRule = Get-Command Get-NetFirewallHyperVRule -ErrorAction SilentlyContinue
   $removeHyperVRule = Get-Command Remove-NetFirewallHyperVRule -ErrorAction SilentlyContinue
@@ -102,28 +119,44 @@ function Add-WSLMDNSRules {
     return
   }
 
-  if ($PSCmdlet.ShouldProcess("WSL Hyper-V Firewall", "allow Caduceus mDNS UDP 5353")) {
-    Remove-HyperVRuleIfPresent -Name "Caduceus-WSL-mDNS-UDP5353-In"
-    Remove-HyperVRuleIfPresent -Name "Caduceus-WSL-mDNS-UDP5353-Out"
+  if ($RuleKind -eq "mDNS") {
+    if ($PSCmdlet.ShouldProcess("WSL Hyper-V Firewall", "allow Caduceus mDNS UDP 5353")) {
+      Remove-HyperVRuleIfPresent -Name "Caduceus-WSL-mDNS-UDP5353-In"
+      Remove-HyperVRuleIfPresent -Name "Caduceus-WSL-mDNS-UDP5353-Out"
+
+      New-NetFirewallHyperVRule `
+        -Name "Caduceus-WSL-mDNS-UDP5353-In" `
+        -DisplayName "Caduceus WSL mDNS (UDP 5353 In)" `
+        -VMCreatorId $WslCreatorId `
+        -Direction Inbound `
+        -Action Allow `
+        -Protocol UDP `
+        -LocalPorts 5353 `
+        -RemotePorts 5353 | Out-Null
+
+      New-NetFirewallHyperVRule `
+        -Name "Caduceus-WSL-mDNS-UDP5353-Out" `
+        -DisplayName "Caduceus WSL mDNS (UDP 5353 Out)" `
+        -VMCreatorId $WslCreatorId `
+        -Direction Outbound `
+        -Action Allow `
+        -Protocol UDP `
+        -RemotePorts 5353 | Out-Null
+    }
+    return
+  }
+
+  if ($PSCmdlet.ShouldProcess("WSL Hyper-V Firewall", "allow Caduceus daemon TCP $TcpPort")) {
+    Remove-HyperVRuleIfPresent -Name "Caduceus-WSL-Daemon-TCP$TcpPort-In"
 
     New-NetFirewallHyperVRule `
-      -Name "Caduceus-WSL-mDNS-UDP5353-In" `
-      -DisplayName "Caduceus WSL mDNS (UDP 5353 In)" `
+      -Name "Caduceus-WSL-Daemon-TCP$TcpPort-In" `
+      -DisplayName "Caduceus WSL daemon (TCP $TcpPort In)" `
       -VMCreatorId $WslCreatorId `
       -Direction Inbound `
       -Action Allow `
-      -Protocol UDP `
-      -LocalPorts 5353 `
-      -RemotePorts 5353 | Out-Null
-
-    New-NetFirewallHyperVRule `
-      -Name "Caduceus-WSL-mDNS-UDP5353-Out" `
-      -DisplayName "Caduceus WSL mDNS (UDP 5353 Out)" `
-      -VMCreatorId $WslCreatorId `
-      -Direction Outbound `
-      -Action Allow `
-      -Protocol UDP `
-      -RemotePorts 5353 | Out-Null
+      -Protocol TCP `
+      -LocalPorts $TcpPort | Out-Null
   }
 }
 
@@ -141,8 +174,13 @@ if ($AllowNativeDaemonTcp) {
 
 if (!$SkipWSL) {
   Add-WSLMDNSRules
+
+  if ($AllowWSLDaemonTcp) {
+    Add-WSLDaemonTCPRule
+  }
 }
 
 Write-Host "Caduceus mDNS firewall rules are configured."
 Write-Host "Profiles: $($Profiles -join ', ')"
 Write-Host "Use -AllowNativeDaemonTcp to also allow inbound TCP to native Windows caduceusd.exe."
+Write-Host "Use -AllowWSLDaemonTcp -WSLDaemonTcpPort 37392 after configuring WSL caduceusd to listen on that fixed port."

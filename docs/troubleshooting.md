@@ -36,4 +36,18 @@ On Windows hosts, run an elevated PowerShell session and allow Caduceus mDNS thr
 
 If running from a WSL path trips PowerShell's unsigned-script policy, use the `.cmd` wrapper or run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\enable-mdns-firewall.ps1`.
 
-The script also adds WSL Hyper-V firewall mDNS rules when those cmdlets are available on the Windows build. If discovery works but task connections still fail, configure Caduceus to listen on a fixed TCP port and add a matching inbound firewall rule for that port.
+The script also adds WSL Hyper-V firewall mDNS rules when those cmdlets are available on the Windows build. If discovery works but task connections still fail while `caduceusd` is running inside WSL, configure Caduceus to listen on a fixed libp2p TCP port:
+
+```yaml
+node:
+  listen_addrs:
+    - "/ip4/0.0.0.0/tcp/37392"
+```
+
+Then add a matching WSL Hyper-V firewall rule from an elevated Windows shell:
+
+```powershell
+.\deploy\windows\enable-mdns-firewall.cmd -AllowWSLDaemonTcp -WSLDaemonTcpPort 37392
+```
+
+Restart the WSL `caduceusd` process after changing `listen_addrs`.
