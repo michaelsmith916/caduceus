@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +28,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 type Node struct {
@@ -72,6 +75,7 @@ func New(ctx context.Context, opts Options) (*Node, error) {
 	h, err := libp2p.New(
 		libp2p.Identity(opts.Identity),
 		libp2p.ListenAddrStrings(listenAddrs...),
+		libp2p.AddrsFactory(filterAdvertisedAddrs),
 		libp2p.Security(noise.ID, noise.New),
 	)
 	if err != nil {
@@ -124,6 +128,37 @@ func (n *Node) ListenAddrs() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func filterAdvertisedAddrs(addrs []ma.Multiaddr) []ma.Multiaddr {
+	out := make([]ma.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if shouldAdvertiseLANAddr(addr) {
+			out = append(out, addr)
+		}
+	}
+	return out
+}
+
+func shouldAdvertiseLANAddr(addr ma.Multiaddr) bool {
+	ip, err := manet.ToIP(addr)
+	if err != nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+		return false
+	}
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return true
+	}
+	if ip4[0] == 10 && ip4[1] == 255 && ip4[2] == 255 && ip4[3] == 254 {
+		return false
+	}
+	if ip4[0] == 172 && ip4[1] >= 17 && ip4[1] <= 19 {
+		return false
+	}
+	return !net.IP(ip4).Equal(net.IPv4bcast)
 }
 
 func (n *Node) Status() map[string]any {

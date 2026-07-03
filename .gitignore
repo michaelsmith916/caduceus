@@ -3,3 +3,4 @@ packages/
 .cache/
 *.log
 *.tmp
+scripts/__pycache__/mdns-caduceus-probe.cpython-312.pyc
