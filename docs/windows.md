@@ -3,6 +3,7 @@
 Native Windows support is PowerShell based.
 
 ```powershell
+ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\deploy\windows\install.ps1
 & "$env:LOCALAPPDATA\Caduceus\bin\caduceusd.exe"
 ```
