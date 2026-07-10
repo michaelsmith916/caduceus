@@ -246,7 +246,7 @@ verbose diagnostics.
 
 - [Plugin README](plugin/README.md)
 - [Runtime specification](plugin/SPEC.md)
-- [Standalone skill source](skill/SKILL.md)
+- [Packaged skill source](plugin/skills/remote-prompt-delegation/SKILL.md)
 - [MCP server documentation](../docs/mcp.md)
 
 Run all repository tests:

@@ -9,7 +9,6 @@ import unittest
 
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
-HERMES_DIR = PLUGIN_DIR.parent
 
 
 def load_plugin():
@@ -105,17 +104,9 @@ class PluginTests(unittest.TestCase):
         self.assertIn('version: "0.2.0"', manifest)
         self.assertNotIn("requires_mcp:", manifest)
 
-    def test_packaged_skill_matches_standalone_skill(self):
-        packaged = (
-            PLUGIN_DIR / "skills" / "remote-prompt-delegation" / "SKILL.md"
-        ).read_bytes()
-        standalone = (HERMES_DIR / "skill" / "SKILL.md").read_bytes()
-
-        self.assertEqual(packaged, standalone)
-
     def test_installed_subdirectory_retains_repository_license(self):
         packaged = (PLUGIN_DIR / "LICENSE").read_bytes()
-        repository = (HERMES_DIR.parent / "LICENSE").read_bytes()
+        repository = (PLUGIN_DIR.parents[1] / "LICENSE").read_bytes()
 
         self.assertEqual(packaged, repository)
 

@@ -65,7 +65,7 @@ transport consumed by Hermes's official Python MCP SDK. Legacy
 - The manifest parses as version 1 and names the plugin `caduceus`.
 - Hermes loads the plugin without errors and records one skill and one command.
 - `/caduceus-status` dispatches the expected MCP tool with empty arguments.
-- The packaged and standalone skill copies are byte-identical.
+- The packaged skill path exists and resolves during plugin registration.
 - Repository tests and `git diff --check` pass.
 
 ## Normative references
