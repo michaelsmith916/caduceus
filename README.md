@@ -40,7 +40,7 @@ Use `./scripts/install-linux.sh` for a user-local install and optional systemd u
 From PowerShell:
 
 ```powershell
-.\deploy\windows\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1
 & "$env:LOCALAPPDATA\Caduceus\bin\caduceusd.exe"
 ```
 
@@ -94,6 +94,19 @@ Example MCP client config:
 ```
 
 Core tools include `caduceus.list_workers`, `caduceus.validate_task`, `caduceus.run_remote_prompt`, `caduceus.get_task_events`, and `caduceus.get_task_result`.
+
+### Hermes Agent
+
+Install and enable the Caduceus plugin with Hermes Agent v0.18.2 or newer:
+
+```bash
+hermes plugins install michaelsmith916/caduceus/hermes/plugin --enable
+```
+
+The plugin bundles the safe-delegation skill and `/caduceus-status`. It keeps
+`caduceus-mcp` as the tool transport instead of duplicating MCP tools in
+Python. See the [WSL Ubuntu and native Windows setup guide](hermes/README.md)
+for MCP configuration and verification.
 
 ## Security Warning
 

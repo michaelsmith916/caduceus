@@ -1,10 +1,19 @@
 # MCP
 
-`caduceus-mcp` is a native stdio MCP server. It speaks JSON-RPC over `Content-Length` framed stdio and proxies calls to the local daemon.
+`caduceus-mcp` is a native stdio MCP server. It speaks newline-delimited
+JSON-RPC as required by the
+[MCP stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+and proxies calls to the local daemon. Legacy `Content-Length` framed clients
+remain supported.
+
+Hermes Agent v0.18.2 prefixes MCP tools as
+`mcp__<server>__<sanitized_tool>`. With the required `caduceus` server key,
+`caduceus.get_local_node_status` is exposed as
+`mcp__caduceus__caduceus_get_local_node_status`. See the
+[Hermes integration guide](../hermes/README.md).
 
 On Windows, run the MCP smoke test while `caduceusd.exe` is running:
 
-ie
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File C:\path\to\test-mcp.ps1 `
@@ -16,7 +25,6 @@ The script launches `caduceus-mcp.exe` as an MCP client would, completes the
 handshake, lists tools, and calls `caduceus.get_local_node_status` to verify the
 MCP server can reach the daemon. Use `-McpExe` or `-Config` when using
 non-default paths.
-
 
 Tools:
 

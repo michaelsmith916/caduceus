@@ -32,7 +32,7 @@ func NewServer(client *control.Client, in io.Reader, out io.Writer) *Server {
 func (s *Server) Serve(ctx context.Context) error {
 	reader := bufio.NewReader(s.in)
 	for {
-		body, err := readFrame(reader)
+		body, framing, err := readMessage(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
@@ -48,7 +48,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			continue
 		}
 		resp := s.handle(ctx, req)
-		if err := s.write(resp); err != nil {
+		if err := s.write(resp, framing); err != nil {
 			return err
 		}
 	}
@@ -286,45 +286,75 @@ func getStringArg(args json.RawMessage, key string) string {
 	return ""
 }
 
-func readFrame(r *bufio.Reader) ([]byte, error) {
+type stdioFraming int
+
+const (
+	framingJSONLines stdioFraming = iota
+	framingContentLength
+)
+
+// readMessage reads the MCP newline-delimited stdio format. It also accepts
+// the Content-Length framing used by earlier Caduceus clients and records the
+// input format so the response can preserve compatibility for that request.
+func readMessage(r *bufio.Reader) ([]byte, stdioFraming, error) {
+	line, err := r.ReadString('\n')
+	if err != nil {
+		return nil, framingJSONLines, err
+	}
+	trimmed := strings.TrimSpace(line)
+	for trimmed == "" {
+		line, err = r.ReadString('\n')
+		if err != nil {
+			return nil, framingJSONLines, err
+		}
+		trimmed = strings.TrimSpace(line)
+	}
+
+	if !strings.HasPrefix(strings.ToLower(trimmed), "content-length:") {
+		return []byte(trimmed), framingJSONLines, nil
+	}
+
 	length := -1
 	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
+		header := strings.TrimRight(line, "\r\n")
+		if header == "" {
 			break
 		}
-		parts := strings.SplitN(line, ":", 2)
+		parts := strings.SplitN(header, ":", 2)
 		if len(parts) != 2 {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(parts[0]), "Content-Length") {
+			return nil, framingContentLength, fmt.Errorf("invalid MCP header %q", header)
+		} else if strings.EqualFold(strings.TrimSpace(parts[0]), "Content-Length") {
 			n, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 			if err != nil {
-				return nil, err
+				return nil, framingContentLength, err
 			}
 			length = n
 		}
+		line, err = r.ReadString('\n')
+		if err != nil {
+			return nil, framingContentLength, err
+		}
 	}
 	if length < 0 {
-		return nil, errors.New("missing Content-Length")
+		return nil, framingContentLength, errors.New("missing Content-Length")
 	}
 	body := make([]byte, length)
-	_, err := io.ReadFull(r, body)
-	return body, err
+	_, err = io.ReadFull(r, body)
+	return body, framingContentLength, err
 }
 
-func (s *Server) write(resp rpcResponse) error {
+func (s *Server) write(resp rpcResponse, framing stdioFraming) error {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err = fmt.Fprintf(s.out, "Content-Length: %d\r\n\r\n%s", len(data), data)
+	if framing == framingContentLength {
+		_, err = fmt.Fprintf(s.out, "Content-Length: %d\r\n\r\n%s", len(data), data)
+		return err
+	}
+	_, err = fmt.Fprintf(s.out, "%s\n", data)
 	return err
 }
 
@@ -347,6 +377,8 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// MarshalFrame encodes the legacy Content-Length format for compatibility
+// tests and clients. New MCP stdio clients should use newline-delimited JSON.
 func MarshalFrame(v any) ([]byte, error) {
 	body, err := json.Marshal(v)
 	if err != nil {

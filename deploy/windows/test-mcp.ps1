@@ -15,9 +15,7 @@ function Write-McpMessage {
   )
 
   $json = $Message | ConvertTo-Json -Depth 20 -Compress
-  $body = $Utf8.GetBytes($json)
-  $header = $Utf8.GetBytes("Content-Length: $($body.Length)`r`n`r`n")
-  $Stream.Write($header, 0, $header.Length)
+  $body = $Utf8.GetBytes("$json`n")
   $Stream.Write($body, 0, $body.Length)
   $Stream.Flush()
 }
@@ -44,42 +42,26 @@ function Read-McpMessage {
     [int]$TimeoutMilliseconds
   )
 
-  $header = New-Object System.Collections.Generic.List[byte]
+  $body = New-Object System.Collections.Generic.List[byte]
   $oneByte = New-Object byte[] 1
   while ($true) {
     $count = Read-WithTimeout $Stream $oneByte 0 1 $TimeoutMilliseconds
     if ($count -eq 0) {
       throw "caduceus-mcp.exe closed stdout before sending a complete response."
     }
-    $header.Add($oneByte[0])
-    $n = $header.Count
-    if ($n -ge 4 -and
-        $header[$n - 4] -eq 13 -and $header[$n - 3] -eq 10 -and
-        $header[$n - 2] -eq 13 -and $header[$n - 1] -eq 10) {
+    if ($oneByte[0] -eq 10) {
       break
     }
-    if ($n -gt 16384) {
-      throw "MCP response headers exceeded 16 KiB."
+    $body.Add($oneByte[0])
+    if ($body.Count -gt 16777216) {
+      throw "MCP response exceeded 16 MiB."
     }
   }
 
-  $headerText = [System.Text.Encoding]::ASCII.GetString($header.ToArray())
-  if ($headerText -notmatch '(?im)^Content-Length:\s*(\d+)\r?$') {
-    throw "MCP response did not contain a Content-Length header."
+  if ($body.Count -gt 0 -and $body[$body.Count - 1] -eq 13) {
+    $body.RemoveAt($body.Count - 1)
   }
-
-  $contentLength = [int]$Matches[1]
-  $body = New-Object byte[] $contentLength
-  $offset = 0
-  while ($offset -lt $contentLength) {
-    $count = Read-WithTimeout $Stream $body $offset ($contentLength - $offset) $TimeoutMilliseconds
-    if ($count -eq 0) {
-      throw "caduceus-mcp.exe closed stdout before sending the complete response body."
-    }
-    $offset += $count
-  }
-
-  return $Utf8.GetString($body) | ConvertFrom-Json
+  return $Utf8.GetString($body.ToArray()) | ConvertFrom-Json
 }
 
 function Assert-RpcResponse {

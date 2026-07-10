@@ -3,9 +3,14 @@
 Native Windows support is PowerShell based.
 
 ```powershell
- Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\deploy\windows\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1
 & "$env:LOCALAPPDATA\Caduceus\bin\caduceusd.exe"
+```
+
+Pass `-Build` to force rebuilding the Windows binaries before installation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Build
 ```
 
 Current-user startup:

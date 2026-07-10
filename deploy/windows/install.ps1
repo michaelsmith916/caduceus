@@ -1,12 +1,13 @@
 param(
-  [string]$InstallDir = "$env:LOCALAPPDATA\Caduceus\bin"
+  [string]$InstallDir = "$env:LOCALAPPDATA\Caduceus\bin",
+  [switch]$Build
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path "$PSScriptRoot\..\.."
 $Dist = Join-Path $Root "dist\windows-amd64"
 
-if (!(Test-Path $Dist)) {
+if ($Build -or !(Test-Path $Dist)) {
   Write-Host "Building Windows binaries..."
   & bash "$Root\scripts\build.sh"
 }
