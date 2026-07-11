@@ -47,11 +47,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install
 Optional startup and service helpers:
 
 ```powershell
-.\deploy\windows\add-startup.ps1
-.\deploy\windows\install-service.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\add-startup.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install-service.ps1
 ```
 
 Service install requires an elevated PowerShell session.
+The service reuses the config and node identity initialized for the current user.
 
 ## Quick Start: macOS
 

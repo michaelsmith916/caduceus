@@ -23,8 +23,12 @@ Optional service install:
 
 ```powershell
 Start-Process PowerShell -Verb RunAs
-.\deploy\windows\install-service.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install-service.ps1
 ```
+
+The service runs under the Windows Service Control Manager and explicitly uses
+the config and node identity initialized for the user who installs it. Rerunning
+the command updates an existing `Caduceus` service before starting it.
 
 Allow LAN mDNS discovery through Windows Firewall:
 

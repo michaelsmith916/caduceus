@@ -15,16 +15,25 @@ import (
 
 func main() {
 	var configPath string
+	var serviceName string
 	var version bool
 	flag.StringVar(&configPath, "config", "", "path to config.yaml")
+	flag.StringVar(&serviceName, "service-name", "Caduceus", "Windows service name")
 	flag.BoolVar(&version, "version", false, "print version")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "caduceusd %s\n\nUsage:\n  caduceusd [--config path]\n\n", caduceus.Version)
+		fmt.Fprintf(flag.CommandLine.Output(), "caduceusd %s\n\nUsage:\n  caduceusd [--config path] [--service-name name]\n\n", caduceus.Version)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 	if version {
 		fmt.Println(caduceus.Version)
+		return
+	}
+	if handled, err := runWindowsService(serviceName, configPath); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "caduceusd:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
