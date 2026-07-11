@@ -124,3 +124,6 @@ Caduceus is for trusted LANs. A matching group hash is not identity. Keep `requi
 ## Roadmap
 
 Phase II adds non-LAN discovery options, relay/NAT traversal, and richer worker capabilities. Later phases explore sandboxed tools, a polished tray/dashboard, scheduling, policy, multiple backends, and signed worker attestations.
+
+
+Copyright (c) 2026 Verdant Code, LLC
