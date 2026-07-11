@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path "$PSScriptRoot\..\.."
 $Dist = Join-Path $Root "dist\windows-amd64"
+$Config = Join-Path $env:APPDATA "Caduceus\config.yaml"
+$ConfigExists = Test-Path $Config
 
 if ($Build -or !(Test-Path $Dist)) {
   Write-Host "Building Windows binaries..."
@@ -14,7 +16,11 @@ if ($Build -or !(Test-Path $Dist)) {
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item "$Dist\caduceusd.exe", "$Dist\caduceusctl.exe", "$Dist\caduceus-mcp.exe", "$Dist\caduceus-tray.exe" -Destination $InstallDir -Force
-& "$InstallDir\caduceusctl.exe" init
+if (!$ConfigExists) {
+  & "$InstallDir\caduceusctl.exe" --config $Config init
+} else {
+  Write-Host "Preserved existing config at $Config"
+}
 
 Write-Host "Installed Caduceus to $InstallDir"
 Write-Host "Add $InstallDir to PATH if desired."

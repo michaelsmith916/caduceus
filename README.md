@@ -53,6 +53,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install
 
 Service install requires an elevated PowerShell session.
 The service reuses the config and node identity initialized for the current user.
+Reinstalling binaries preserves an existing `config.yaml`.
 
 ## Quick Start: macOS
 

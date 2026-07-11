@@ -13,6 +13,9 @@ Pass `-Build` to force rebuilding the Windows binaries before installation:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Build
 ```
 
+The installer initializes Caduceus only when `config.yaml` does not exist.
+Subsequent installs replace the binaries while preserving the existing config.
+
 Current-user startup:
 
 ```powershell
@@ -27,8 +30,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\windows\install
 ```
 
 The service runs under the Windows Service Control Manager and explicitly uses
-the config and node identity initialized for the user who installs it. Rerunning
-the command updates an existing `Caduceus` service before starting it.
+the config, data directory, control token, and node identity initialized for the
+user who installs it. Rerunning the command updates an existing `Caduceus`
+service before starting it.
 
 Allow LAN mDNS discovery through Windows Firewall:
 

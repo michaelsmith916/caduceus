@@ -94,10 +94,11 @@ func DefaultPaths() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
+	var paths Paths
 	switch runtime.GOOS {
 	case "darwin":
 		base := filepath.Join(home, "Library", "Application Support", "Caduceus")
-		return Paths{ConfigDir: base, ConfigPath: filepath.Join(base, "config.yaml"), DataDir: base}, nil
+		paths = Paths{ConfigDir: base, ConfigPath: filepath.Join(base, "config.yaml"), DataDir: base}
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
@@ -107,11 +108,11 @@ func DefaultPaths() (Paths, error) {
 		if localAppData == "" {
 			localAppData = filepath.Join(home, "AppData", "Local")
 		}
-		return Paths{
+		paths = Paths{
 			ConfigDir:  filepath.Join(appData, "Caduceus"),
 			ConfigPath: filepath.Join(appData, "Caduceus", "config.yaml"),
 			DataDir:    filepath.Join(localAppData, "Caduceus"),
-		}, nil
+		}
 	default:
 		configHome := os.Getenv("XDG_CONFIG_HOME")
 		if configHome == "" {
@@ -121,12 +122,20 @@ func DefaultPaths() (Paths, error) {
 		if dataHome == "" {
 			dataHome = filepath.Join(home, ".local", "share")
 		}
-		return Paths{
+		paths = Paths{
 			ConfigDir:  filepath.Join(configHome, "caduceus"),
 			ConfigPath: filepath.Join(configHome, "caduceus", "config.yaml"),
 			DataDir:    filepath.Join(dataHome, "caduceus"),
-		}, nil
+		}
 	}
+	if configDir := strings.TrimSpace(os.Getenv("CADUCEUS_CONFIG_DIR")); configDir != "" {
+		paths.ConfigDir = configDir
+		paths.ConfigPath = filepath.Join(configDir, "config.yaml")
+	}
+	if dataDir := strings.TrimSpace(os.Getenv("CADUCEUS_DATA_DIR")); dataDir != "" {
+		paths.DataDir = dataDir
+	}
+	return paths, nil
 }
 
 func Default() (Config, error) {
@@ -210,8 +219,8 @@ func Load(path string) (Config, string, error) {
 	if err != nil {
 		return Config{}, "", err
 	}
-	cfg.applyDerivedDefaults(paths)
 	cfg.ApplyEnv()
+	cfg.applyDerivedDefaults(paths)
 	return cfg, path, nil
 }
 

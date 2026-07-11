@@ -15,19 +15,25 @@ if (!$Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 $Config = Join-Path $env:APPDATA "Caduceus\config.yaml"
+$ConfigDir = Split-Path -Parent $Config
+$DataDir = Join-Path $env:LOCALAPPDATA "Caduceus"
 if (!(Test-Path $Config)) {
   throw "Caduceus config not found at $Config. Run deploy\windows\install.ps1 first."
 }
 
-$BinaryPath = "`"$Exe`" --service-name `"$ServiceName`" --config `"$Config`""
+$BinaryPath = "`"$Exe`" --service-name `"$ServiceName`" --config `"$Config`" --config-dir `"$ConfigDir`" --data-dir `"$DataDir`""
 $ExistingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($ExistingService) {
   if ($ExistingService.Status -ne "Stopped") {
     Stop-Service -Name $ServiceName
   }
-  & sc.exe config $ServiceName binPath= $BinaryPath start= auto | Out-Null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to update Windows service $ServiceName (sc.exe exit code $LASTEXITCODE)."
+  $ServiceInstance = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
+  $ChangeResult = Invoke-CimMethod -InputObject $ServiceInstance -MethodName Change -Arguments @{
+    PathName = $BinaryPath
+    StartMode = "Automatic"
+  }
+  if ($ChangeResult.ReturnValue -ne 0) {
+    throw "Failed to update Windows service $ServiceName (Win32_Service.Change return value $($ChangeResult.ReturnValue))."
   }
   Write-Host "Updated existing service $ServiceName."
 } else {

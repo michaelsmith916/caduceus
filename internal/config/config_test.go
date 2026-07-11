@@ -47,3 +47,30 @@ func TestEnsureConfigWritesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLoadUsesEnvironmentRootsForBlankDerivedPaths(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config-root")
+	dataDir := filepath.Join(dir, "data-root")
+	t.Setenv("CADUCEUS_CONFIG_DIR", configDir)
+	t.Setenv("CADUCEUS_DATA_DIR", dataDir)
+
+	path := filepath.Join(dir, "existing.yaml")
+	contents := []byte("control:\n  auth_token_path: \"\"\nstorage:\n  data_dir: \"\"\nsecurity:\n  p2p_key_path: \"\"\n")
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Storage.DataDir != dataDir {
+		t.Fatalf("data dir = %q, want %q", cfg.Storage.DataDir, dataDir)
+	}
+	if cfg.Control.AuthTokenPath != filepath.Join(dataDir, "control.token") {
+		t.Fatalf("control token path = %q", cfg.Control.AuthTokenPath)
+	}
+	if cfg.Security.P2PKeyPath != filepath.Join(configDir, "p2p.key") {
+		t.Fatalf("p2p key path = %q", cfg.Security.P2PKeyPath)
+	}
+}
