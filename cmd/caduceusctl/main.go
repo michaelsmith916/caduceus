@@ -65,6 +65,10 @@ func run(args []string) error {
 		return tasksCommand(ctx, opts, args[1:])
 	case "run-prompt":
 		return runPromptCommand(ctx, opts, args[1:])
+	case "route":
+		return routeCommand(ctx, opts, args[1:])
+	case "enrollment":
+		return enrollmentCommand(ctx, opts, args[1:])
 	case "ollama":
 		return ollamaCommand(ctx, opts, args[1:])
 	case "version", "--version":
@@ -107,6 +111,10 @@ Usage:
   caduceusctl [--config path] workers list|get
   caduceusctl [--config path] tasks list|get|events|cancel
   caduceusctl [--config path] run-prompt --worker auto --prompt "..."
+  caduceusctl [--config path] route --explain [--output human|json] task.json|-
+  caduceusctl [--config path] enrollment invite|list|get|approve|deny|audit
+  caduceusctl [--config path] enrollment request --coordinator <multiaddr> --token-file <path|->
+  caduceusctl [--config path] enrollment status <request_id> [--coordinator <multiaddr>]
   caduceusctl ollama check|install
 
 `, caduceus.Version)
@@ -371,6 +379,8 @@ func runPromptCommand(ctx context.Context, opts cliOptions, args []string) error
 	temp := fs.String("temperature", "", "temperature")
 	maxTokens := fs.Int("max-tokens", 0, "max tokens")
 	timeout := fs.Int("timeout", 0, "timeout seconds")
+	idempotent := fs.Bool("idempotent", false, "allow safe redispatch after worker loss")
+	maxAttempts := fs.Int("max-attempts", 0, "maximum attempts for idempotent work")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -398,6 +408,8 @@ func runPromptCommand(ctx context.Context, opts cliOptions, args []string) error
 		Constraints:    tasks.Constraints{RequiredCapabilities: []string{"llm"}},
 		TimeoutSeconds: *timeout,
 		TrustLevel:     "trusted-lan",
+		Idempotent:     *idempotent,
+		MaxAttempts:    *maxAttempts,
 	}
 	return withClient(ctx, opts, func(c *control.Client) error {
 		resp, err := c.RunTask(ctx, req)

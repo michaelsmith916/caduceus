@@ -1,40 +1,59 @@
 # Security
 
-Caduceus is designed for trusted LANs, not hostile networks.
+Caduceus is designed for trusted LANs, not hostile networks. Phase 2 improves authorization, replay resistance, bounded resource use, and auditability; it does not turn self-reported workers into trusted execution environments.
 
-## Trust Model
+## Trust model
 
-Every node has a libp2p identity keypair. Every trusted group shares P2P key material. Caduceus derives a stable SHA-256 group hash from that key and advertises only the hash. The raw key is stored locally and is never logged.
+Each node has a libp2p identity keypair. Noise authenticates the remote libp2p peer and protects stream confidentiality and integrity. The default allowlist authorizes that peer ID and optional public-key fingerprint. A shared/routing group hash is only a discovery and routing namespace: possession or knowledge of it grants no identity or authorization.
 
-## Peer Identity
+Keep `require_allowlist: true`. Enrollment approval adds a specific authenticated peer; it never distributes a private identity key or shared group key.
 
-The group hash is not identity. A peer must also be allowed by peer ID when `require_allowlist: true`, which is the default.
+## Threat assessment
 
-## mDNS Exposure
+| Threat | Phase 2 control | Residual risk |
+| --- | --- | --- |
+| Unknown LAN peer | Noise identity, group filter, default allowlist | mDNS still reveals service presence |
+| Stolen invitation | short TTL, one-time hash, CIDR/rate checks, approval | thief on an allowed network can submit before expiry |
+| Replay/duplicate enrollment | nonce, peer/fingerprint duplicate checks, persistent state | compromised approved identity must be revoked |
+| Forged/stale worker status | authenticated sender, session ID, monotonic sequence, receipt-time liveness | approved worker may lie about resources/performance |
+| Capacity exhaustion | hard concurrency and bounded admission/decoder/queue limits | approved peers can still submit permitted load |
+| Late result after failover | attempt ID/token fencing | old partitioned work may still cause external side effects |
+| Coordinator restart | active attempts interrupted; replay only if explicitly idempotent | operator must inspect ambiguous non-idempotent work |
+| Control API exposure | Unix socket or loopback bearer token | local account compromise remains in scope |
 
-mDNS can reveal that a Caduceus node exists on the LAN. Unknown peers may be discovered, but Phase I ignores peers that fail group hash or allowlist checks.
+## Enrollment secrets and privacy
 
-## Noise
+Invitation tokens are random, displayed once, stored only as hashes, and sent only over the encrypted enrollment stream. They are omitted from list/status responses, audit records, normal logs, MCP, and Hermes. Enrollment decisions return coordinator addresses, peer identity/fingerprint, and routing group hash only.
 
-libp2p streams are secured with Noise. Noise protects stream confidentiality and integrity between libp2p peers.
+CIDR restrictions reduce exposure but are not authentication. Keep explicit approval enabled and verify the pending peer ID/fingerprint through an independent channel. Pending display names and other peer-supplied metadata are untrusted text.
 
-## Local Control API
+Worker activity detectors remain local. Peers receive an opaque availability state and `accepting_work`, not usernames, login identities, foreground applications, or precise idle time.
 
-The control API is local only. Unix systems default to a Unix socket. Windows defaults to loopback HTTP with a random bearer token in the user data directory.
+## Scheduling and telemetry
 
-## Prompt and Data Leakage
+Worker-reported capabilities, models, resources, cost, queue depth, and performance are untrusted hints. Hard trust/allowlist checks occur independently. Missing or unsupported soft metrics are neutral; an unknown hard resource requirement fails closed.
 
-Prompt tasks send prompt text to another machine. Do not send secrets, credentials, unreleased source, private files, or sensitive personal data unless the user explicitly approves and the peer is trusted.
+CPU and RAM probes describe the worker host. GPU status is unsupported unless a platform provider is integrated. Telemetry should not be used as billing evidence or attestation. The first CPU sample can be unknown because it establishes a measurement baseline; activity-dependent `idle` and `logged_out` modes fail closed without their platform providers.
 
-## Why No Remote Shell
+A concurrency permit is a task-slot reservation, not a CPU/RAM/GPU reservation. Fresh telemetry is revalidated before execution, but concurrently admitted tasks can observe the same resource headroom. Use conservative thresholds and concurrency limits where aggregate isolation matters.
 
-Remote shell execution is excluded because it turns a prompt worker into a general remote execution system. Phase I only accepts validated prompt tasks.
+Version 1 peers lack generation-2 attempt-token fencing. Compatibility negotiation does not confer generation-2 stale-result protection or exactly-once semantics.
 
-## Safe Defaults
+## Prompt and data leakage
 
-- `require_allowlist: true`
-- LAN mDNS only
-- no DHT, relay, or NAT traversal
-- prompt tasks only
-- local file storage
-- no auto-updating daemon
+Prompt tasks send text to another machine and may persist task metadata, events, results, and artifacts locally. Do not send secrets, credentials, unreleased source, private files, or sensitive personal data unless the user explicitly approves and the peer, machine, backend, and user account are trusted.
+
+## Why no remote shell
+
+Remote shell execution remains excluded because it would turn a prompt worker into a general remote-execution system. Phase 2 still accepts validated task kinds and does not provide arbitrary filesystem or command access.
+
+## Safe defaults
+
+- allowlist required;
+- trusted-LAN enrollment disabled and approval required when enabled;
+- LAN mDNS only; no DHT, relay, or NAT traversal;
+- worker concurrency of one and worker wait queue depth zero;
+- non-idempotent, one-attempt tasks unless explicitly opted into replay;
+- bounded generation-2 envelopes;
+- local file persistence and local-only control transport;
+- no auto-updating daemon.

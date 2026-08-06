@@ -15,8 +15,10 @@ The installable directory contains:
 
 - `plugin.yaml`: Hermes manifest version 1 for the `caduceus` standalone plugin.
 - `__init__.py`: dependency-free `register(ctx)` entry point.
+- `enrollment_v1.py`: dependency-free, explicitly invoked enrollment adapter.
 - `skills/remote-prompt-delegation/SKILL.md`: packaged, instruction-only delegation
   workflow.
+- `ENROLLMENT-V1.md`: versioned enrollment MCP and presentation contract.
 - `after-install.md`: setup guidance displayed by the Hermes installer.
 - `LICENSE`: MIT terms retained in the installed subdirectory package.
 
@@ -32,9 +34,15 @@ On registration the plugin must:
 
 1. Register `caduceus:remote-prompt-delegation` with `ctx.register_skill`.
 2. Register `/caduceus-status` with `ctx.register_command`.
-3. Dispatch status only through
+3. Register `/caduceus-enrollments` with `ctx.register_command`; the empty form
+   and `list` explicitly poll for pending requests, while `approve <request_id>`
+   and `deny <request_id>` make a specific decision.
+4. Dispatch status only through
    `mcp__caduceus__caduceus_get_local_node_status` using `ctx.dispatch_tool`.
-4. Return an actionable configuration message when that MCP tool is absent.
+5. Dispatch enrollment operations only through the three versioned MCP mappings
+   defined in [ENROLLMENT-V1.md](ENROLLMENT-V1.md).
+6. Return an actionable configuration message when an expected MCP tool is
+   absent.
 
 The required Hermes MCP server key is `caduceus`. Caduceus's advertised tool
 names contain dots; Hermes v0.18.2 exposes them as
@@ -49,22 +57,32 @@ transport consumed by Hermes's official Python MCP SDK. Legacy
 - Plugin import and registration perform no network, process, or filesystem
   mutations.
 - The plugin never receives or stores Caduceus credentials.
+- Enrollment output is constructed from a bounded field allowlist. Invitation
+  tokens, group material, credentials, and unknown fields are never rendered or
+  sent to a decision tool.
+- Enrollment metadata is visibly labeled untrusted, expired requests are not
+  presented for a decision, and duplicate prompts are suppressed in memory for
+  the current Hermes process.
 - The skill requires task validation and an explicitly trusted worker before
   execution.
 - The plugin never replaces or overrides built-in Hermes tools.
 
 ## Non-goals
 
-- Reimplementing MCP or Caduceus control APIs in Python.
+- Reimplementing the MCP transport or Caduceus control service in Python.
 - Starting, stopping, installing, or updating Caduceus processes.
 - Silently editing an operator's Hermes configuration.
 - Sending tasks automatically from a lifecycle hook.
+- Claiming unsolicited enrollment notifications: the verified Hermes contract
+  has no such plugin hook, so enrollment review is an invoked command/poll.
 
 ## Acceptance checks
 
 - The manifest parses as version 1 and names the plugin `caduceus`.
-- Hermes loads the plugin without errors and records one skill and one command.
+- Hermes loads the plugin without errors and records one skill and two commands.
 - `/caduceus-status` dispatches the expected MCP tool with empty arguments.
+- `/caduceus-enrollments` lists, approves, and denies through the exact MCP
+  contracts; tests cover sanitization, duplicate suppression, and expiration.
 - The packaged skill path exists and resolves during plugin registration.
 - Repository tests and `git diff --check` pass.
 

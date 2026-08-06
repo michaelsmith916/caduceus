@@ -39,16 +39,22 @@ type ErrorPayload struct {
 }
 
 type CancelPayload struct {
-	TaskID string `json:"task_id"`
+	TaskID       string `json:"task_id"`
+	AttemptID    string `json:"attempt_id,omitempty"`
+	AttemptToken string `json:"attempt_token,omitempty"`
 }
 
 func newEnvelope(kind, sender, group string, payload any) (Envelope, error) {
+	return newEnvelopeVersion(caduceus.Protocol, kind, sender, group, payload)
+}
+
+func newEnvelopeVersion(version, kind, sender, group string, payload any) (Envelope, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return Envelope{}, err
 	}
 	return Envelope{
-		Version:      caduceus.Protocol,
+		Version:      version,
 		Type:         kind,
 		ID:           "msg-" + time.Now().UTC().Format("20060102T150405.000000000"),
 		Timestamp:    time.Now().UTC().Format(time.RFC3339Nano),

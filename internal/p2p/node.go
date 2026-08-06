@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/caduceus/caduceus/internal/config"
+	"github.com/caduceus/caduceus/internal/enrollment"
 	"github.com/caduceus/caduceus/internal/logging"
 	"github.com/caduceus/caduceus/internal/openai"
 	"github.com/caduceus/caduceus/internal/security"
@@ -33,13 +35,15 @@ import (
 )
 
 type Node struct {
-	cfg       config.Config
-	host      host.Host
-	groupHash string
-	allowed   security.AllowedPeers
-	store     *store.Store
-	ai        *openai.Client
-	log       *logging.Logger
+	cfg        config.Config
+	host       host.Host
+	groupHash  string
+	allowed    security.AllowedPeers
+	store      *store.Store
+	ai         *openai.Client
+	log        *logging.Logger
+	phase2     *phase2Runtime
+	enrollment *enrollment.Manager
 
 	mu      sync.RWMutex
 	workers map[string]workers.Worker
@@ -49,13 +53,14 @@ type Node struct {
 }
 
 type Options struct {
-	Config    config.Config
-	Identity  p2pcrypto.PrivKey
-	GroupHash string
-	Allowed   security.AllowedPeers
-	Store     *store.Store
-	OpenAI    *openai.Client
-	Logger    *logging.Logger
+	Config     config.Config
+	Identity   p2pcrypto.PrivKey
+	GroupHash  string
+	Allowed    security.AllowedPeers
+	Store      *store.Store
+	OpenAI     *openai.Client
+	Logger     *logging.Logger
+	Enrollment *enrollment.Manager
 }
 
 func New(ctx context.Context, opts Options) (*Node, error) {
@@ -82,23 +87,35 @@ func New(ctx context.Context, opts Options) (*Node, error) {
 		return nil, err
 	}
 	n := &Node{
-		cfg:       opts.Config,
-		host:      h,
-		groupHash: opts.GroupHash,
-		allowed:   opts.Allowed,
-		store:     opts.Store,
-		ai:        opts.OpenAI,
-		log:       opts.Logger,
-		workers:   map[string]workers.Worker{},
-		cancels:   map[string]context.CancelFunc{},
+		cfg:        opts.Config,
+		host:       h,
+		groupHash:  opts.GroupHash,
+		allowed:    opts.Allowed,
+		store:      opts.Store,
+		ai:         opts.OpenAI,
+		log:        opts.Logger,
+		enrollment: opts.Enrollment,
+		workers:    map[string]workers.Worker{},
+		cancels:    map[string]context.CancelFunc{},
 	}
-	h.SetStreamHandler(protocol.ID(WorkerProtocol), n.handleWorkerStream)
-	h.SetStreamHandler(protocol.ID(TaskProtocol), n.handleTaskStream)
+	phase2, err := newPhase2Runtime(ctx, n)
+	if err != nil {
+		_ = h.Close()
+		return nil, err
+	}
+	n.phase2 = phase2
+	h.SetStreamHandler(protocol.ID(WorkerProtocol), n.handleWorkerStreamPhase2)
+	h.SetStreamHandler(protocol.ID(WorkerProtocolV2), n.handleWorkerStreamPhase2)
+	h.SetStreamHandler(protocol.ID(TaskProtocol), n.handleTaskStreamPhase2)
+	h.SetStreamHandler(protocol.ID(TaskProtocolV2), n.handleTaskStreamPhase2)
+	h.SetStreamHandler(protocol.ID(EnrollmentProtocolV1), n.handleEnrollmentStream)
 	h.SetStreamHandler(protocol.ID(EventsProtocol), func(s network.Stream) { _ = s.Close() })
 	n.registerSelf(ctx)
+	n.phase2.start(n)
 	if opts.Config.Node.EnableMDNS {
 		service := mdns.NewMdnsService(h, opts.Config.Node.MDNSServiceName, &discoveryNotifee{node: n})
 		if err := service.Start(); err != nil {
+			n.phase2.close()
 			_ = h.Close()
 			return nil, err
 		}
@@ -108,6 +125,9 @@ func New(ctx context.Context, opts Options) (*Node, error) {
 }
 
 func (n *Node) Close() error {
+	if n.phase2 != nil {
+		n.phase2.close()
+	}
 	if n.mdns != nil {
 		_ = n.mdns.Close()
 	}
@@ -166,13 +186,24 @@ func (n *Node) Status() map[string]any {
 		"peer_id":      n.HostID(),
 		"name":         n.cfg.Node.Name,
 		"listen_addrs": n.ListenAddrs(),
-		"group_hash":   n.groupHash,
+		"group_hash":   n.groupID(),
 		"workers":      len(n.ListWorkers()),
 		"version":      caduceus.Version,
 	}
 }
 
 func (n *Node) ListWorkers() []workers.Worker {
+	if n.phase2 != nil {
+		snapshot := n.phase2.registry.Snapshot()
+		out := make([]workers.Worker, 0, len(snapshot.Workers))
+		for _, candidate := range snapshot.Workers {
+			out = append(out, candidate.Worker)
+		}
+		sort.SliceStable(out, func(i, j int) bool {
+			return out[i].Local && !out[j].Local
+		})
+		return out
+	}
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	out := make([]workers.Worker, 0, len(n.workers))
@@ -189,6 +220,9 @@ func (n *Node) ListWorkers() []workers.Worker {
 }
 
 func (n *Node) GetWorker(workerID string) (workers.Worker, bool) {
+	if n.phase2 != nil {
+		return n.phase2.registry.Get(workerID)
+	}
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	w, ok := n.workers[workerID]
@@ -203,74 +237,103 @@ func (n *Node) ValidateTask(req tasks.Request) error {
 }
 
 func (n *Node) RunTask(ctx context.Context, req tasks.Request) (tasks.Result, error) {
-	if req.TaskID == "" {
-		req.TaskID = tasks.NewID("task")
-	}
-	if req.Kind == "" {
-		req.Kind = tasks.KindPrompt
-	}
-	if req.TrustLevel == "" {
-		req.TrustLevel = n.cfg.Security.TrustLevelDefault
-	}
-	if req.TimeoutSeconds == 0 {
-		req.TimeoutSeconds = n.cfg.OpenAI.TimeoutSeconds
-	}
-	if req.Task.Model == "" {
-		req.Task.Model = n.cfg.OpenAI.DefaultModel
-	}
+	req = n.prepareTaskRequest(req)
 	if err := n.ValidateTask(req); err != nil {
 		return tasks.Result{}, err
 	}
-	worker := n.chooseWorker(req.WorkerID)
-	if worker.WorkerID == "" {
-		return tasks.Result{}, errors.New("no suitable worker found")
-	}
-	req.WorkerID = worker.WorkerID
-	if worker.Local {
-		return n.executeLocal(ctx, req, n.HostID(), n.HostID(), nil)
-	}
-	return n.runRemote(ctx, worker, req)
+	return n.dispatchTask(ctx, req)
 }
 
 func (n *Node) CancelTask(ctx context.Context, taskID string) error {
-	n.mu.Lock()
-	cancel := n.cancels[taskID]
-	n.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	var canceled bool
+	var err error
+	if n.phase2 != nil {
+		n.phase2.queueMu.Lock()
+		canceled, err = n.store.CancelQueued(taskID)
+		if canceled {
+			n.phase2.signalQueueLocked()
+		}
+		n.phase2.queueMu.Unlock()
+	} else {
+		canceled, err = n.store.CancelQueued(taskID)
+	}
+	if err != nil {
+		return err
+	}
+	if canceled {
 		return nil
 	}
 	meta, err := n.store.GetTask(taskID)
 	if err != nil {
 		return err
 	}
+	if meta.Status == tasks.StatusCanceled {
+		return nil
+	}
+	if terminalTaskStatus(meta.Status) {
+		return fmt.Errorf("task %q is already terminal with status %q", taskID, meta.Status)
+	}
+	now := time.Now().UTC()
+	if _, err := n.store.UpdateTask(taskID, func(current *tasks.Metadata) error {
+		if current.Status == tasks.StatusCanceled {
+			return nil
+		}
+		if terminalTaskStatus(current.Status) {
+			return fmt.Errorf("task %q is already terminal with status %q", taskID, current.Status)
+		}
+		current.Status = tasks.StatusCanceled
+		current.Error = "canceled by requester"
+		current.InterruptionReason = "canceled"
+		current.FinishedAt = &now
+		if len(current.Attempts) > 0 {
+			attempt := &current.Attempts[len(current.Attempts)-1]
+			attempt.State = tasks.AttemptStateCanceled
+			attempt.Error = "canceled by requester"
+			attempt.Interruption = "canceled"
+			attempt.UpdatedAt = now
+			attempt.FinishedAt = &now
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	_ = n.store.AppendEvent(tasks.NewEvent(taskID, 0, tasks.EventCanceled, "cancel requested", ""))
+
+	n.mu.Lock()
+	cancel := n.cancels[taskID]
+	n.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if n.phase2 != nil {
+		n.phase2.cancelTask(taskID)
+	}
 	if meta.WorkerPeer == "" || meta.WorkerPeer == n.HostID() {
-		return errors.New("task is not running locally")
+		return nil
 	}
 	id, err := peer.Decode(meta.WorkerPeer)
 	if err != nil {
 		return err
 	}
-	stream, err := n.host.NewStream(ctx, id, protocol.ID(TaskProtocol))
+	payload := CancelPayload{TaskID: taskID}
+	if len(meta.Attempts) > 0 {
+		attempt := meta.Attempts[len(meta.Attempts)-1]
+		payload.AttemptID = attempt.AttemptID
+		payload.AttemptToken = attempt.AttemptToken
+	}
+	stream, err := n.host.NewStream(ctx, id, protocol.ID(TaskProtocolV2), protocol.ID(TaskProtocol))
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 	enc := json.NewEncoder(stream)
-	env, err := n.envelope(TypeTaskCancel, CancelPayload{TaskID: taskID})
+	env, err := n.envelopeForProtocol(stream.Protocol(), TypeTaskCancel, payload)
 	if err != nil {
 		return err
 	}
 	if err := enc.Encode(env); err != nil {
 		return err
 	}
-	_, _ = n.store.UpdateTask(taskID, func(meta *tasks.Metadata) error {
-		meta.Status = tasks.StatusCanceled
-		now := time.Now().UTC()
-		meta.FinishedAt = &now
-		return nil
-	})
-	_ = n.store.AppendEvent(tasks.NewEvent(taskID, 0, tasks.EventCanceled, "cancel requested", ""))
 	return nil
 }
 
@@ -394,14 +457,28 @@ func (n *Node) executeLocal(ctx context.Context, req tasks.Request, requesterPee
 	}()
 
 	now := time.Now().UTC()
-	meta := tasks.Metadata{
-		TaskID:        req.TaskID,
-		Kind:          req.Kind,
-		Status:        tasks.StatusAccepted,
-		RequesterPeer: requesterPeer,
-		WorkerPeer:    workerPeer,
-		CreatedAt:     now,
-		Request:       req,
+	meta, getErr := n.store.GetTask(req.TaskID)
+	if getErr != nil {
+		if !errors.Is(getErr, os.ErrNotExist) {
+			return tasks.Result{}, getErr
+		}
+		meta = tasks.Metadata{
+			TaskID:        req.TaskID,
+			Kind:          req.Kind,
+			Status:        tasks.StatusAccepted,
+			RequesterPeer: requesterPeer,
+			WorkerPeer:    workerPeer,
+			CreatedAt:     now,
+			Request:       req,
+		}
+	} else {
+		meta.Kind = req.Kind
+		meta.Status = tasks.StatusAccepted
+		meta.RequesterPeer = requesterPeer
+		meta.WorkerPeer = workerPeer
+		meta.Request = req
+		meta.Error = ""
+		meta.FinishedAt = nil
 	}
 	if err := n.store.SaveTask(meta); err != nil {
 		return tasks.Result{}, err
@@ -413,11 +490,13 @@ func (n *Node) executeLocal(ctx context.Context, req tasks.Request, requesterPee
 		meta.Status = tasks.StatusRunning
 		now := time.Now().UTC()
 		meta.StartedAt = &now
+		updateContextAttempt(ctx, meta, tasks.AttemptStateRunning, "", now)
 		return nil
 	})
 	if err := n.emit(req.TaskID, tasks.EventStarted, "task started", "", TypeTaskEvent, send); err != nil {
 		return tasks.Result{}, err
 	}
+	inferenceStarted := time.Now()
 	result, err := n.ai.Chat(runCtx, req.TaskID, req.Task, func(event tasks.Event) error {
 		if event.EventType == "" {
 			event.EventType = tasks.EventToken
@@ -443,12 +522,14 @@ func (n *Node) executeLocal(ctx context.Context, req tasks.Request, requesterPee
 			message = "task canceled"
 		}
 		result = tasks.Result{TaskID: req.TaskID, Status: status, Error: message, Artifacts: []tasks.Artifact{}}
+		decorateResultWithAttempt(ctx, &result)
 		_ = n.store.SaveResult(result)
 		_, _ = n.store.UpdateTask(req.TaskID, func(meta *tasks.Metadata) error {
 			meta.Status = status
 			meta.Error = message
 			now := time.Now().UTC()
 			meta.FinishedAt = &now
+			updateContextAttempt(ctx, meta, attemptStateForResult(result), message, now)
 			return nil
 		})
 		_ = n.emit(req.TaskID, eventType, message, "", TypeTaskEvent, send)
@@ -457,11 +538,15 @@ func (n *Node) executeLocal(ctx context.Context, req tasks.Request, requesterPee
 		}
 		return result, err
 	}
+	if n.phase2 != nil && result.Usage.CompletionTokens > 0 {
+		_, _ = n.phase2.performance.Observe(req.Task.Model, int64(result.Usage.CompletionTokens), time.Since(inferenceStarted))
+	}
 	result.TaskID = req.TaskID
 	result.Status = tasks.StatusCompleted
 	if result.Artifacts == nil {
 		result.Artifacts = []tasks.Artifact{}
 	}
+	decorateResultWithAttempt(ctx, &result)
 	if err := n.store.SaveResult(result); err != nil {
 		return tasks.Result{}, err
 	}
@@ -469,14 +554,15 @@ func (n *Node) executeLocal(ctx context.Context, req tasks.Request, requesterPee
 		meta.Status = tasks.StatusCompleted
 		now := time.Now().UTC()
 		meta.FinishedAt = &now
+		updateContextAttempt(ctx, meta, tasks.AttemptStateCompleted, "", now)
 		return nil
 	})
 	if err := n.emit(req.TaskID, tasks.EventCompleted, "task completed", "", TypeTaskEvent, send); err != nil {
-		return tasks.Result{}, err
+		return result, err
 	}
 	if send != nil {
 		if err := send(TypeTaskResult, result); err != nil {
-			return tasks.Result{}, err
+			return result, err
 		}
 	}
 	return result, nil
@@ -597,20 +683,21 @@ func (n *Node) sendError(enc *json.Encoder, code, message string) error {
 }
 
 func (n *Node) envelope(kind string, payload any) (Envelope, error) {
-	return newEnvelope(kind, n.HostID(), n.groupHash, payload)
+	return newEnvelope(kind, n.HostID(), n.groupID(), payload)
 }
 
 func (n *Node) verifyEnvelope(env Envelope, remote peer.ID) error {
-	if env.GroupHash != n.groupHash {
-		return errors.New("group hash mismatch")
+	if err := validateEnvelopeFields(env, remote.String(), time.Now().UTC()); err != nil {
+		return err
 	}
-	if env.SenderPeerID != "" && env.SenderPeerID != remote.String() {
-		return errors.New("sender peer id mismatch")
+	if env.GroupHash != n.groupID() {
+		return errors.New("group hash mismatch")
 	}
 	if remote.String() == n.HostID() {
 		return nil
 	}
-	if !n.allowed.IsAllowed(remote.String(), n.cfg.Security.RequireAllowlist) {
+	_, _, allowed := n.allowedPeer(remote.String())
+	if !allowed {
 		return errors.New("peer is not in allowlist")
 	}
 	return nil
@@ -633,9 +720,8 @@ func (n *Node) chooseWorker(workerID string) workers.Worker {
 
 func (n *Node) registerSelf(ctx context.Context) {
 	worker := n.selfWorker(ctx)
-	n.mu.Lock()
-	n.workers[worker.WorkerID] = worker
-	n.mu.Unlock()
+	n.setLegacyWorker(worker)
+	n.registerPhase2Worker(worker)
 }
 
 func (n *Node) selfWorker(ctx context.Context) workers.Worker {
@@ -645,7 +731,7 @@ func (n *Node) selfWorker(ctx context.Context) workers.Worker {
 	if got, err := n.ai.ListModels(modelCtx); err == nil && len(got) > 0 {
 		models = got
 	}
-	return workers.Worker{
+	return n.decorateSelfWorker(workers.Worker{
 		WorkerID: n.HostID(),
 		PeerID:   n.HostID(),
 		Name:     n.cfg.Node.Name,
@@ -660,24 +746,22 @@ func (n *Node) selfWorker(ctx context.Context) workers.Worker {
 		ListenAddrs: n.ListenAddrs(),
 		Labels:      n.cfg.Worker.Labels,
 		Version:     caduceus.Version,
-		GroupHash:   n.groupHash,
+		GroupHash:   n.groupID(),
 		LastSeen:    time.Now().UTC(),
 		Local:       true,
 		Allowed:     true,
 		TrustLevel:  n.cfg.Security.TrustLevelDefault,
-	}
+	})
 }
 
 func (n *Node) registerWorker(worker workers.Worker, peerID string) {
-	if worker.WorkerID == "" {
-		worker.WorkerID = peerID
-	}
+	worker.WorkerID = peerID
 	worker.PeerID = peerID
-	worker.GroupHash = n.groupHash
+	worker.GroupHash = n.groupID()
 	worker.LastSeen = time.Now().UTC()
 	worker.Local = peerID == n.HostID()
-	allowed, ok := n.allowed.Get(peerID)
-	worker.Allowed = n.allowed.IsAllowed(peerID, n.cfg.Security.RequireAllowlist)
+	allowed, ok, isAllowed := n.allowedPeer(peerID)
+	worker.Allowed = isAllowed
 	if ok && allowed.TrustLevel != "" {
 		worker.TrustLevel = allowed.TrustLevel
 	} else {
@@ -686,9 +770,8 @@ func (n *Node) registerWorker(worker workers.Worker, peerID string) {
 	if !worker.Allowed {
 		return
 	}
-	n.mu.Lock()
-	n.workers[worker.WorkerID] = worker
-	n.mu.Unlock()
+	n.setLegacyWorker(worker)
+	n.registerPhase2Worker(worker)
 }
 
 type discoveryNotifee struct {
@@ -702,7 +785,8 @@ func (d *discoveryNotifee) HandlePeerFound(info peer.AddrInfo) {
 	if info.ID == d.node.host.ID() {
 		return
 	}
-	if d.node.cfg.Security.RequireAllowlist && !d.node.allowed.IsAllowed(info.ID.String(), true) {
+	_, _, allowed := d.node.allowedPeer(info.ID.String())
+	if d.node.cfg.Security.RequireAllowlist && !allowed {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -714,14 +798,19 @@ func (d *discoveryNotifee) HandlePeerFound(info peer.AddrInfo) {
 		}
 		return
 	}
-	stream, err := d.node.host.NewStream(ctx, info.ID, protocol.ID(WorkerProtocol))
+	stream, err := d.node.host.NewStream(ctx, info.ID, protocol.ID(WorkerProtocolV2), protocol.ID(WorkerProtocol))
 	if err != nil {
 		return
 	}
 	defer stream.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = stream.SetDeadline(deadline)
+	}
+	stopReset := context.AfterFunc(ctx, func() { _ = stream.Reset() })
+	defer stopReset()
 	enc := json.NewEncoder(stream)
-	dec := json.NewDecoder(stream)
-	env, err := d.node.envelope(TypeWorkerHello, d.node.selfWorker(ctx))
+	dec := newEnvelopeDecoder(stream)
+	env, err := d.node.envelopeForProtocol(stream.Protocol(), TypeWorkerHello, d.node.selfWorker(ctx))
 	if err != nil {
 		return
 	}

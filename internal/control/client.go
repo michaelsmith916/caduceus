@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/caduceus/caduceus/internal/tasks"
 )
 
 type Client struct {
@@ -63,6 +65,42 @@ func (c *Client) RunTask(ctx context.Context, req RunTaskRequest) (Response, err
 
 func (c *Client) ValidateTask(ctx context.Context, req RunTaskRequest) (Response, error) {
 	return c.post(ctx, "/v1/tasks/validate", req)
+}
+
+func (c *Client) ExplainRoute(ctx context.Context, req tasks.Request) (Response, error) {
+	return c.post(ctx, "/v1/route/explain", req)
+}
+
+func (c *Client) CreateEnrollmentInvitation(ctx context.Context) (Response, error) {
+	return c.post(ctx, "/v1/enrollment/invitations", map[string]any{})
+}
+
+func (c *Client) ListEnrollmentRequests(ctx context.Context) (Response, error) {
+	return c.get(ctx, "/v1/enrollment/requests")
+}
+
+func (c *Client) GetEnrollmentRequest(ctx context.Context, requestID string) (Response, error) {
+	return c.get(ctx, "/v1/enrollment/requests/"+url.PathEscape(requestID))
+}
+
+func (c *Client) ApproveEnrollment(ctx context.Context, requestID, actor string) (Response, error) {
+	return c.post(ctx, "/v1/enrollment/requests/"+url.PathEscape(requestID)+"/approve", EnrollmentDecisionRequest{Actor: actor})
+}
+
+func (c *Client) DenyEnrollment(ctx context.Context, requestID, actor string) (Response, error) {
+	return c.post(ctx, "/v1/enrollment/requests/"+url.PathEscape(requestID)+"/deny", EnrollmentDecisionRequest{Actor: actor})
+}
+
+func (c *Client) EnrollmentAudit(ctx context.Context) (Response, error) {
+	return c.get(ctx, "/v1/enrollment/audit")
+}
+
+func (c *Client) SubmitEnrollment(ctx context.Context, req EnrollmentSubmitRequest) (Response, error) {
+	return c.post(ctx, "/v1/enrollment/submit", req)
+}
+
+func (c *Client) CheckEnrollment(ctx context.Context, req EnrollmentStatusRequest) (Response, error) {
+	return c.post(ctx, "/v1/enrollment/status", req)
 }
 
 func (c *Client) ListTasks(ctx context.Context, status string) (Response, error) {

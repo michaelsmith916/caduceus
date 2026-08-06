@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/caduceus/caduceus/internal/config"
 	"github.com/caduceus/caduceus/internal/control"
 	cryptoutil "github.com/caduceus/caduceus/internal/crypto"
+	"github.com/caduceus/caduceus/internal/enrollment"
 	"github.com/caduceus/caduceus/internal/localnode"
 	"github.com/caduceus/caduceus/internal/logging"
 	"github.com/caduceus/caduceus/internal/openai"
@@ -20,11 +24,13 @@ import (
 )
 
 type App struct {
+	mu         sync.RWMutex
 	ConfigPath string
 	Cfg        config.Config
 	GroupHash  string
 	Store      *store.Store
 	Node       *p2p.Node
+	Enrollment *enrollment.Manager
 	Control    *control.Server
 	Log        *logging.Logger
 }
@@ -35,13 +41,16 @@ func New(ctx context.Context, configPath string) (*App, error) {
 		return nil, err
 	}
 	log := logging.New(cfg.Logging.Level, cfg.Logging.JSON)
-	key, _, err := cryptoutil.LoadOrCreateSharedKey(cfg.Security.P2PKeyPath)
-	if err != nil {
-		return nil, err
-	}
-	groupHash, err := cryptoutil.HashSharedKey(key)
-	if err != nil {
-		return nil, err
+	groupHash := strings.ToLower(strings.TrimSpace(cfg.Security.P2PKeyHash))
+	if !validGroupHash(groupHash) {
+		key, _, keyErr := cryptoutil.LoadOrCreateSharedKey(cfg.Security.P2PKeyPath)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		groupHash, err = cryptoutil.HashSharedKey(key)
+		if err != nil {
+			return nil, err
+		}
 	}
 	cfg.Security.P2PKeyHash = groupHash
 	priv, peerID, _, err := localnode.LoadOrCreateIdentity(cfg.Node.PrivateKeyPath)
@@ -57,16 +66,41 @@ func New(ctx context.Context, configPath string) (*App, error) {
 	if err := st.Init(); err != nil {
 		return nil, err
 	}
+	enrollmentCfg := cfg.Enrollment.TrustedLAN
+	enrollmentManager, err := enrollment.New(enrollment.Options{
+		Enabled:         enrollmentCfg.Enabled,
+		StatePath:       filepath.Join(cfg.Storage.DataDir, "enrollment", "state.json"),
+		RequestTTL:      enrollmentCfg.RequestTTL(),
+		TokenTTL:        enrollmentCfg.TokenTTL(),
+		RateLimit:       enrollmentCfg.RateLimit,
+		RateWindow:      enrollmentCfg.RateWindow(),
+		AllowedCIDRs:    append([]string(nil), enrollmentCfg.AllowedNetworks...),
+		RequireApproval: enrollmentCfg.RequireApproval,
+		PersistApproval: func(request enrollment.Request) error {
+			return security.AddPeer(cfg.Security.AllowedPeersPath, security.AllowedPeer{
+				PeerID:               request.PeerID,
+				Name:                 request.DisplayName,
+				PublicKeyFingerprint: request.PublicKeyFingerprint,
+				TrustLevel:           "trusted-lan",
+				Allowed:              true,
+				Notes:                "approved trusted-LAN enrollment " + request.ID,
+			})
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
 	apiKey := os.Getenv(cfg.OpenAI.APIKeyEnv)
 	ai := openai.New(cfg.OpenAI.BaseURL, apiKey, cfg.OpenAI.DefaultModel, cfg.OpenAITimeout())
 	node, err := p2p.New(ctx, p2p.Options{
-		Config:    cfg,
-		Identity:  priv,
-		GroupHash: groupHash,
-		Allowed:   allowed,
-		Store:     st,
-		OpenAI:    ai,
-		Logger:    log,
+		Config:     cfg,
+		Identity:   priv,
+		GroupHash:  groupHash,
+		Allowed:    allowed,
+		Store:      st,
+		OpenAI:     ai,
+		Logger:     log,
+		Enrollment: enrollmentManager,
 	})
 	if err != nil {
 		return nil, err
@@ -82,6 +116,7 @@ func New(ctx context.Context, configPath string) (*App, error) {
 		GroupHash:  groupHash,
 		Store:      st,
 		Node:       node,
+		Enrollment: enrollmentManager,
 		Log:        log,
 	}
 	app.Control = control.NewServer(cfg.ControlEndpoint(), token, app)
@@ -122,6 +157,8 @@ func (a *App) Status(ctx context.Context) (any, error) {
 
 func (a *App) Config(ctx context.Context) (any, error) {
 	_ = ctx
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	cfg := a.Cfg
 	cfg.Security.P2PKeyHash = a.GroupHash
 	return map[string]any{
@@ -145,14 +182,24 @@ func (a *App) GetWorker(ctx context.Context, workerID string) (any, error) {
 }
 
 func (a *App) RunTask(ctx context.Context, req control.RunTaskRequest) (any, error) {
+	taskID := strings.TrimSpace(req.TaskID)
+	if taskID == "" {
+		taskID = tasks.NewID("task")
+	}
+	kind := strings.TrimSpace(req.Kind)
+	if kind == "" {
+		kind = tasks.KindPrompt
+	}
 	taskReq := tasks.Request{
-		TaskID:         tasks.NewID("task"),
-		Kind:           tasks.KindPrompt,
+		TaskID:         taskID,
+		Kind:           kind,
 		Task:           req.Task,
 		Constraints:    req.Constraints,
 		TimeoutSeconds: req.TimeoutSeconds,
 		TrustLevel:     req.TrustLevel,
 		WorkerID:       req.WorkerID,
+		Idempotent:     req.Idempotent,
+		MaxAttempts:    req.MaxAttempts,
 	}
 	result, err := a.Node.RunTask(ctx, taskReq)
 	if err != nil {
@@ -220,13 +267,20 @@ func (a *App) CancelTask(ctx context.Context, taskID string) (any, error) {
 
 func (a *App) ValidateTask(ctx context.Context, req control.RunTaskRequest) (any, error) {
 	_ = ctx
+	kind := strings.TrimSpace(req.Kind)
+	if kind == "" {
+		kind = tasks.KindPrompt
+	}
 	taskReq := tasks.Request{
-		Kind:           tasks.KindPrompt,
+		TaskID:         req.TaskID,
+		Kind:           kind,
 		Task:           req.Task,
 		Constraints:    req.Constraints,
 		TimeoutSeconds: req.TimeoutSeconds,
 		TrustLevel:     req.TrustLevel,
 		WorkerID:       req.WorkerID,
+		Idempotent:     req.Idempotent,
+		MaxAttempts:    req.MaxAttempts,
 	}
 	if err := a.Node.ValidateTask(taskReq); err != nil {
 		return map[string]any{"valid": false, "error": err.Error()}, nil
@@ -244,6 +298,11 @@ func ControlClient(configPath string) (*control.Client, error) {
 		return nil, err
 	}
 	return control.NewClient(cfg.ControlEndpoint(), token), nil
+}
+
+func validGroupHash(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32 && strings.ToLower(value) == value
 }
 
 func Wait(ctx context.Context) {
