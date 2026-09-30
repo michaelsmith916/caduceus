@@ -261,6 +261,10 @@ func TestCallToolDispatchesPhase2Operations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/config" {
+					_ = json.NewEncoder(w).Encode(control.Success(map[string]any{"config": map[string]any{"enrollment": map[string]any{"trusted_lan": map[string]any{"hermes_mode": "invoked"}}}}))
+					return
+				}
 				if r.Method != test.method || r.URL.Path != test.path {
 					t.Errorf("request = %s %s, want %s %s", r.Method, r.URL.Path, test.method, test.path)
 				}

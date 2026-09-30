@@ -53,7 +53,7 @@ func (n *Node) handleTaskAssignment(stream network.Stream, requester string, env
 			return
 		}
 		assignment.Request = n.prepareTaskRequest(assignment.Request)
-		attempt, err := tasks.NewAttempt(assignment.Request.TaskID, n.HostID(), n.phase2.sessionID, 1)
+		attempt, err := tasks.NewAttempt(assignment.Request.TaskID, n.HostID(), n.phase2.currentSession(), 1)
 		if err != nil {
 			_ = n.sendErrorForProtocol(protocolID, encoder, "internal_error", err.Error())
 			return
@@ -69,7 +69,7 @@ func (n *Node) handleTaskAssignment(stream network.Stream, requester string, env
 		n.sendAssignmentRejection(protocolID, encoder, assignment, tasks.RejectStaleAssignment, "assignment targets a different worker")
 		return
 	}
-	if protocolID == protocol.ID(TaskProtocolV2) && assignment.Attempt.WorkerSession != n.phase2.sessionID {
+	if protocolID == protocol.ID(TaskProtocolV2) && assignment.Attempt.WorkerSession != n.phase2.currentSession() {
 		n.sendAssignmentRejection(protocolID, encoder, assignment, tasks.RejectStaleAssignment, "assignment targets an expired worker session")
 		return
 	}
@@ -126,38 +126,13 @@ func (n *Node) handleTaskAssignment(stream network.Stream, requester string, env
 	}
 	defer lease.Release()
 
-	now := time.Now().UTC()
-	acceptedAttempt := assignment.Attempt
-	acceptedAttempt.State = tasks.AttemptStateAccepted
-	acceptedAttempt.UpdatedAt = now
-	meta := tasks.Metadata{
-		TaskID:         assignment.Request.TaskID,
-		Kind:           assignment.Request.Kind,
-		Status:         tasks.StatusAccepted,
-		RequesterPeer:  requester,
-		WorkerPeer:     n.HostID(),
-		CreatedAt:      now,
-		Request:        assignment.Request,
-		Idempotent:     assignment.Request.Idempotent,
-		MaxAttempts:    assignment.Request.EffectiveMaxAttempts(),
-		CurrentAttempt: assignment.Attempt.AttemptNumber,
-		TotalAttempts:  1,
-		Attempts:       []tasks.TaskAttempt{acceptedAttempt},
-	}
-	if existing, getErr := n.store.GetTask(assignment.Request.TaskID); getErr == nil {
-		meta = existing
-		meta.Status = tasks.StatusAccepted
-		meta.RequesterPeer = requester
-		meta.WorkerPeer = n.HostID()
-		meta.Request = assignment.Request
-		meta.CurrentAttempt = assignment.Attempt.AttemptNumber
-		meta.TotalAttempts = len(meta.Attempts) + 1
-		meta.Attempts = append(meta.Attempts, acceptedAttempt)
-		meta.FinishedAt = nil
-		meta.Error = ""
-	}
-	if err := n.store.SaveTask(meta); err != nil {
-		_ = n.sendErrorForProtocol(protocolID, encoder, "persistence_error", err.Error())
+	acceptedAttempt, err := n.acceptInboundAttempt(assignmentCtx, requester, assignment)
+	if err != nil {
+		if errors.Is(err, errAttemptFenced) {
+			n.sendAssignmentRejection(protocolID, encoder, assignment, tasks.RejectStaleAssignment, "assignment changed while awaiting admission")
+		} else {
+			_ = n.sendErrorForProtocol(protocolID, encoder, "persistence_error", err.Error())
+		}
 		return
 	}
 
@@ -170,7 +145,7 @@ func (n *Node) handleTaskAssignment(stream network.Stream, requester string, env
 					AttemptID:    assignment.Attempt.AttemptID,
 					AttemptToken: assignment.Attempt.AttemptToken,
 					WorkerID:     n.HostID(),
-					SessionID:    n.phase2.sessionID,
+					SessionID:    assignment.Attempt.WorkerSession,
 					Timestamp:    time.Now().UTC(),
 				}
 			case TypeTaskResult:
@@ -255,6 +230,41 @@ func (n *Node) handleTaskCancellation(stream network.Stream, requester string, e
 	_ = encoder.Encode(reply)
 }
 
+// acceptInboundAttempt holds task admission ownership through atomic durable
+// revalidation. Cancellation or metadata changes while queued cannot overwrite
+// a newer or terminal assignment.
+func (n *Node) acceptInboundAttempt(ctx context.Context, requester string, assignment TaskAssignment) (tasks.TaskAttempt, error) {
+	n.phase2.mu.Lock()
+	defer n.phase2.mu.Unlock()
+	attempt := assignment.Attempt
+	claim, ok := n.phase2.inbound[inboundAttemptKey(attempt)]
+	if !ok || claim.Requester != requester || ctx.Err() != nil || attempt.WorkerSession != n.phase2.sessionID {
+		return tasks.TaskAttempt{}, errAttemptFenced
+	}
+	now := time.Now().UTC()
+	attempt.State = tasks.AttemptStateAccepted
+	attempt.UpdatedAt = now
+	err := n.store.UpsertTask(attempt.TaskID, func(meta *tasks.Metadata, exists bool) error {
+		if exists && inboundAttemptConflicts(*meta, requester, assignment) {
+			return errAttemptFenced
+		}
+		if !exists {
+			*meta = tasks.Metadata{TaskID: attempt.TaskID, Kind: assignment.Request.Kind, CreatedAt: now}
+		}
+		meta.Status = tasks.StatusAccepted
+		meta.RequesterPeer = requester
+		meta.WorkerPeer = n.HostID()
+		meta.Request = assignment.Request
+		meta.CurrentAttempt = attempt.AttemptNumber
+		meta.TotalAttempts = len(meta.Attempts) + 1
+		meta.Attempts = append(meta.Attempts, attempt)
+		meta.FinishedAt = nil
+		meta.Error = ""
+		return nil
+	})
+	return attempt, err
+}
+
 func (n *Node) claimInboundAttempt(requester string, assignment TaskAssignment, cancel context.CancelFunc) (bool, error) {
 	key := inboundAttemptKey(assignment.Attempt)
 	n.phase2.mu.Lock()
@@ -271,11 +281,11 @@ func (n *Node) claimInboundAttempt(requester string, assignment TaskAssignment, 
 }
 
 func (n *Node) cancelInboundAttempt(requester string, payload CancelPayload) bool {
-	key := payload.TaskID + "\x00" + payload.AttemptID + "\x00" + payload.AttemptToken
+	key := payload.TaskID
 	n.phase2.mu.RLock()
 	claim, ok := n.phase2.inbound[key]
 	n.phase2.mu.RUnlock()
-	if !ok || claim.Requester != requester || claim.Cancel == nil {
+	if !ok || claim.Requester != requester || claim.Attempt.AttemptID != payload.AttemptID || claim.Attempt.AttemptToken != payload.AttemptToken || claim.Cancel == nil {
 		return false
 	}
 	claim.Cancel()
@@ -284,12 +294,14 @@ func (n *Node) cancelInboundAttempt(requester string, payload CancelPayload) boo
 
 func (n *Node) releaseInboundAttempt(attempt tasks.TaskAttempt) {
 	n.phase2.mu.Lock()
-	delete(n.phase2.inbound, inboundAttemptKey(attempt))
+	if claim, ok := n.phase2.inbound[inboundAttemptKey(attempt)]; ok && claim.Attempt.AttemptID == attempt.AttemptID && claim.Attempt.AttemptToken == attempt.AttemptToken {
+		delete(n.phase2.inbound, inboundAttemptKey(attempt))
+	}
 	n.phase2.mu.Unlock()
 }
 
 func inboundAttemptKey(attempt tasks.TaskAttempt) string {
-	return attempt.TaskID + "\x00" + attempt.AttemptID + "\x00" + attempt.AttemptToken
+	return attempt.TaskID
 }
 
 func (n *Node) assignmentAlreadySeen(requester string, assignment TaskAssignment) (bool, error) {
@@ -312,7 +324,7 @@ func inboundAttemptConflicts(meta tasks.Metadata, requester string, assignment T
 	if !reflect.DeepEqual(meta.Request, assignment.Request) {
 		return true
 	}
-	if meta.Status == tasks.StatusCompleted || meta.Status == tasks.StatusCanceled {
+	if meta.Status == tasks.StatusCompleted || meta.Status == tasks.StatusCanceled || meta.Status == tasks.StatusAccepted || meta.Status == tasks.StatusRunning {
 		return true
 	}
 	maxAttemptNumber := 0

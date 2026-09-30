@@ -208,7 +208,14 @@ func (r *phase2Runtime) sweepLoop(node *Node) {
 
 func (r *phase2Runtime) advertise(node *Node) {
 	status := r.localStatus(node)
-	if err := r.registry.Heartbeat(status); err != nil && !errors.Is(err, registry.ErrOutOfOrder) {
+	err := r.registry.Heartbeat(status)
+	if errors.Is(err, registry.ErrNotRegistered) {
+		// A suspended process can also lose its own receipt-time lease.
+		r.renewSession(node, status.SessionID)
+		status = r.localStatus(node)
+		err = r.registry.Heartbeat(status)
+	}
+	if err != nil && !errors.Is(err, registry.ErrOutOfOrder) {
 		if node.log != nil {
 			node.log.Debug("local heartbeat update failed", "error", err.Error())
 		}
@@ -218,6 +225,18 @@ func (r *phase2Runtime) advertise(node *Node) {
 		node.setLegacyWorker(worker)
 	}
 	snapshot := r.registry.Snapshot()
+	// A partition may evict both sides. Authenticated connected peers remain
+	// rendezvous targets even when their registry entries have been removed.
+	known := make(map[string]bool, len(snapshot.Workers))
+	for _, candidate := range snapshot.Workers {
+		known[candidate.Worker.PeerID] = true
+	}
+	for _, id := range node.host.Network().Peers() {
+		_, _, allowed := node.allowedPeer(id.String())
+		if allowed && !known[id.String()] {
+			snapshot.Workers = append(snapshot.Workers, registry.WorkerSnapshot{Worker: workers.Worker{WorkerID: id.String(), PeerID: id.String()}})
+		}
+	}
 	jobs := make([]heartbeatFanoutJob, 0, len(snapshot.Workers))
 	for _, candidate := range snapshot.Workers {
 		worker := candidate.Worker
@@ -237,6 +256,10 @@ func (r *phase2Runtime) advertise(node *Node) {
 }
 
 func (r *phase2Runtime) sendStatus(ctx context.Context, node *Node, worker workers.Worker, status workers.StatusAdvertisement) error {
+	return r.sendStatusOnce(ctx, node, worker, status, true)
+}
+
+func (r *phase2Runtime) sendStatusOnce(ctx context.Context, node *Node, worker workers.Worker, status workers.StatusAdvertisement, allowRejoin bool) error {
 	peerID, err := peer.Decode(worker.PeerID)
 	if err != nil {
 		return err
@@ -283,6 +306,15 @@ func (r *phase2Runtime) sendStatus(ctx context.Context, node *Node, worker worke
 		if acknowledgement.Sequence != status.Sequence || acknowledgement.SessionID != status.SessionID {
 			return errors.New("heartbeat acknowledgement mismatch")
 		}
+	case TypeError:
+		var problem ErrorPayload
+		if err := json.Unmarshal(reply.Payload, &problem); err != nil {
+			return err
+		}
+		if allowRejoin && (problem.Code == "worker_not_registered" || problem.Code == "stale_session") {
+			return r.rejoinWorker(ctx, node, peerID, status.SessionID)
+		}
+		return &workerProtocolError{Code: problem.Code}
 	case TypeWorkerHello:
 		var remote workers.Worker
 		if err := json.Unmarshal(reply.Payload, &remote); err != nil {
@@ -303,6 +335,57 @@ func (r *phase2Runtime) sendStatus(ctx context.Context, node *Node, worker worke
 	return nil
 }
 
+type workerProtocolError struct{ Code string }
+
+func (e *workerProtocolError) Error() string {
+	return "worker protocol rejected message (" + e.Code + ")"
+}
+
+func (r *phase2Runtime) currentSession() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.sessionID
+}
+
+// Only a verified response from an authorized Noise peer can request renewal.
+// Compare the challenged session so delayed responses cannot rotate a newer one.
+func (r *phase2Runtime) renewSession(node *Node, retired string) {
+	r.mu.Lock()
+	if r.sessionID != retired {
+		r.mu.Unlock()
+		return
+	}
+	r.sessionID = tasks.NewID("session")
+	cancels := make([]context.CancelFunc, 0, len(r.inbound))
+	for _, claim := range r.inbound {
+		cancels = append(cancels, claim.Cancel)
+	}
+	r.mu.Unlock()
+	for _, cancel := range cancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	r.cancelWorkerAttempts(node.HostID())
+	node.registerSelf(r.ctx)
+}
+
+func (r *phase2Runtime) rejoinWorker(ctx context.Context, node *Node, id peer.ID, challenged string) error {
+	remote, err := node.exchangeWorkerHelloV2(ctx, id)
+	var problem *workerProtocolError
+	if errors.As(err, &problem) && problem.Code == "session_retired" {
+		r.renewSession(node, challenged)
+		remote, err = node.exchangeWorkerHelloV2(ctx, id)
+	}
+	if err != nil {
+		return err
+	}
+	if err := node.registerWorker(remote, id.String()); err != nil {
+		return err
+	}
+	return r.sendStatusOnce(ctx, node, remote, r.localStatus(node), false)
+}
+
 func (r *phase2Runtime) localStatus(node *Node) workers.StatusAdvertisement {
 	result := r.applyAvailability(node)
 	stats := r.admission.Stats()
@@ -320,7 +403,7 @@ func (r *phase2Runtime) localStatus(node *Node) workers.StatusAdvertisement {
 	return workers.StatusAdvertisement{
 		WorkerID:           node.HostID(),
 		PeerID:             node.HostID(),
-		SessionID:          r.sessionID,
+		SessionID:          r.currentSession(),
 		ProtocolVersion:    caduceus.Protocol,
 		Sequence:           r.sequence.Add(1),
 		Timestamp:          time.Now().UTC(),

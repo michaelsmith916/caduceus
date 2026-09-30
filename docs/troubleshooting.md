@@ -35,6 +35,17 @@ For one dispatch, a worker that has already been tried is never retried. If ever
 
 The requester's durable queue has exact FIFO order. Active attempts are reconciled to interrupted at startup. Only tasks explicitly marked idempotent with remaining attempt budget are automatically restored to the FIFO. Non-idempotent work remains visible for operator inspection and is never silently replayed.
 
+Recovery restores only work owned by this requester; inbound worker assignments
+remain interrupted history. Pre-execution rejections do not consume the
+execution budget. Recovered FIFO entries wait for eligible workers to appear
+after discovery, keeping their queue position until assignment, cancellation,
+or the request timeout during recovery.
+
+An evicted worker renews its session after an authenticated registration
+challenge. Old-session status, assignments, and results remain fenced. If both
+peers were evicted, reciprocal heartbeat rounds can be needed to renew both
+sessions.
+
 ## Late or duplicate result
 
 Generation-2 results must match the active task ID, attempt ID, and random attempt token. A mismatched late result is ignored/fenced. This does not prove that the old worker stopped or undo an external side effect. Generation-1 fallback does not provide this protection.
@@ -47,6 +58,12 @@ Check that trusted-LAN enrollment is enabled on the coordinator, the invitation 
 caduceusctl enrollment list
 caduceusctl enrollment approve <request-id>
 ```
+
+Enrollment status polling reads historical decisions and never restores a
+revoked allowlist entry. After `peers remove` and restart, a previous approval
+does not authorize the peer again. `hermes_mode: disabled` blocks both the
+Hermes enrollment command and direct enrollment MCP tools; local CLI/control
+administration remains available.
 
 The applicant must poll status after approval. Verify the coordinator multiaddress and request ID. Never place an invitation token in logs or support tickets. Replayed, duplicate-peer, duplicate-fingerprint, and invalid-token failures intentionally return a generic rejection.
 

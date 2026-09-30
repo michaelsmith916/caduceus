@@ -62,7 +62,7 @@ func New(ctx context.Context, configPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	st := store.New(cfg.Storage.DataDir)
+	st := store.NewForRequester(cfg.Storage.DataDir, peerID.String())
 	if err := st.Init(); err != nil {
 		return nil, err
 	}

@@ -48,7 +48,7 @@ func (n *Node) decorateSelfWorker(worker workers.Worker) workers.Worker {
 		state = workers.StateBusy
 	}
 	worker.ProtocolVersion = caduceus.Protocol
-	worker.SessionID = n.phase2.sessionID
+	worker.SessionID = n.phase2.currentSession()
 	worker.StatusTimestamp = time.Now().UTC()
 	worker.State = state
 	worker.AcceptingWork = boolPointer(accepting)
@@ -60,16 +60,16 @@ func (n *Node) decorateSelfWorker(worker workers.Worker) workers.Worker {
 	return worker
 }
 
-func (n *Node) registerPhase2Worker(worker workers.Worker) {
+func (n *Node) registerPhase2Worker(worker workers.Worker) error {
 	if n.phase2 == nil {
-		return
+		return nil
 	}
 	result, err := n.phase2.registry.RegisterWithResult(worker)
 	if err != nil {
 		if n.log != nil {
 			n.log.Debug("worker registry update rejected", "worker_id", worker.WorkerID, "peer_id", worker.PeerID, "session_id", worker.SessionID, "error", err.Error())
 		}
-		return
+		return err
 	}
 	if result.SessionReplaced {
 		n.phase2.cancelWorkerAttempts(worker.WorkerID)
@@ -77,6 +77,7 @@ func (n *Node) registerPhase2Worker(worker workers.Worker) {
 			n.log.Info("worker session replaced", "worker_id", worker.WorkerID, "previous_session_id", result.PreviousSessionID, "session_id", result.SessionID)
 		}
 	}
+	return nil
 }
 
 func (n *Node) applyWorkerStatus(status workers.StatusAdvertisement) error {

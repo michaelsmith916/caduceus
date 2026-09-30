@@ -190,7 +190,7 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		if e := decodeEmptyArguments(args); e != nil {
 			resp = control.Failure("bad_request", e.Error(), nil)
 		} else {
-			resp, err = s.client.ListEnrollmentRequests(ctx)
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) { return s.client.ListEnrollmentRequests(ctx) })
 		}
 	case "caduceus.approve_enrollment":
 		var p struct {
@@ -202,7 +202,9 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		} else if strings.TrimSpace(p.RequestID) == "" {
 			resp = control.Failure("bad_request", "request_id is required", nil)
 		} else {
-			resp, err = s.client.ApproveEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.ApprovedBy))
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) {
+				return s.client.ApproveEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.ApprovedBy))
+			})
 		}
 	case "caduceus.deny_enrollment":
 		var p struct {
@@ -214,7 +216,9 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		} else if strings.TrimSpace(p.RequestID) == "" {
 			resp = control.Failure("bad_request", "request_id is required", nil)
 		} else {
-			resp, err = s.client.DenyEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.DeniedBy))
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) {
+				return s.client.DenyEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.DeniedBy))
+			})
 		}
 	default:
 		return nil, fmt.Errorf("unknown tool %q", name)
@@ -228,6 +232,35 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		"structuredContent": resp,
 		"isError":           !resp.OK,
 	}, nil
+}
+
+// Check the daemon configuration on every invocation, including calls made
+// directly through MCP rather than through the Hermes command adapter.
+func (s *Server) enrollmentTool(ctx context.Context, action func() (control.Response, error)) (control.Response, error) {
+	response, err := s.client.Config(ctx)
+	if err != nil || !response.OK {
+		return response, err
+	}
+	data, err := json.Marshal(response.Data)
+	if err != nil {
+		return control.Failure("invalid_config", "could not read integration mode", nil), nil
+	}
+	var settings struct {
+		Config struct {
+			Enrollment struct {
+				TrustedLAN struct {
+					HermesMode string `json:"hermes_mode"`
+				} `json:"trusted_lan"`
+			} `json:"enrollment"`
+		} `json:"config"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil || settings.Config.Enrollment.TrustedLAN.HermesMode == "" {
+		return control.Failure("invalid_config", "could not read integration mode", nil), nil
+	}
+	if settings.Config.Enrollment.TrustedLAN.HermesMode != "invoked" {
+		return control.Failure("hermes_mode_disabled", "Hermes enrollment integration is disabled", nil), nil
+	}
+	return action()
 }
 
 func (s *Server) readResource(ctx context.Context, uri string) (any, error) {

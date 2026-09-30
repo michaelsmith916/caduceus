@@ -121,14 +121,49 @@ func (n *Node) resumePersistedQueue() {
 				return
 			}
 			taskID := entries[0].TaskID
-			if err := n.awaitDispatchTurn(n.phase2.ctx, taskID); err != nil {
+			meta, err := n.store.GetTask(taskID)
+			if err != nil {
+				return
+			}
+			taskCtx := n.phase2.ctx
+			cancelTask := func() {}
+			if meta.Request.TimeoutSeconds > 0 {
+				taskCtx, cancelTask = context.WithTimeout(taskCtx, time.Duration(meta.Request.TimeoutSeconds)*time.Second)
+			}
+			if err := n.awaitRecoveredWorker(taskCtx, meta.Request); err != nil {
+				cancelTask()
+				if n.phase2.ctx.Err() != nil {
+					return
+				}
+				if !errors.Is(err, errQueuedTaskCanceled) {
+					n.phase2.queueMu.Lock()
+					canceled, cancelErr := n.store.CancelQueued(taskID)
+					if canceled {
+						n.phase2.signalQueueLocked()
+					}
+					n.phase2.queueMu.Unlock()
+					if cancelErr != nil {
+						if n.log != nil {
+							n.log.Error("cancel restored task", "task_id", taskID, "error", cancelErr.Error())
+						}
+						return
+					}
+				}
+				continue
+			}
+			if err := n.awaitDispatchTurn(taskCtx, taskID); err != nil {
+				cancelTask()
+				if n.phase2.ctx.Err() == nil && (errors.Is(err, errQueuedTaskCanceled) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+					continue
+				}
 				if n.phase2.ctx.Err() == nil && n.log != nil {
 					n.log.Error("claim restored task", "task_id", taskID, "error", err.Error())
 				}
 				return
 			}
-			meta, err := n.store.GetTask(taskID)
+			meta, err = n.store.GetTask(taskID)
 			if err != nil {
+				cancelTask()
 				n.phase2.releaseDispatchPermit()
 				if n.log != nil {
 					n.log.Error("load restored task", "task_id", taskID, "error", err.Error())
@@ -136,15 +171,58 @@ func (n *Node) resumePersistedQueue() {
 				continue
 			}
 			n.phase2.wg.Add(1)
-			go func(req tasks.Request) {
+			go func(ctx context.Context, cancel context.CancelFunc, req tasks.Request) {
+				defer cancel()
 				defer n.phase2.wg.Done()
 				defer n.phase2.releaseDispatchPermit()
-				if _, err := n.dispatchPrepared(n.phase2.ctx, req); err != nil && n.log != nil {
+				if _, err := n.dispatchPrepared(ctx, req); err != nil && n.log != nil {
 					n.log.Error("restored task failed", "task_id", req.TaskID, "error", err.Error())
 				}
-			}(meta.Request)
+			}(taskCtx, cancelTask, meta.Request)
 		}
 	}()
+}
+
+// Keep restored work durable while discovery rebuilds the registry. Only the
+// FIFO head waits here, with no per-task goroutine or consumed dispatch permit.
+func (n *Node) awaitRecoveredWorker(ctx context.Context, req tasks.Request) error {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		n.phase2.queueMu.Lock()
+		changed := n.phase2.queueChanged
+		n.phase2.queueMu.Unlock()
+		if n.taskCanceled(req.TaskID) {
+			return errQueuedTaskCanceled
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		decision, err := n.phase2.evaluate(req)
+		if err != nil {
+			return err
+		}
+		meta, err := n.store.GetTask(req.TaskID)
+		if err != nil {
+			return err
+		}
+		tried := make(map[string]struct{}, len(meta.Attempts))
+		for _, attempt := range meta.Attempts {
+			tried[attempt.WorkerID] = struct{}{}
+		}
+		applyTriedWorkers(&decision, tried)
+		if len(eligibleCandidates(decision)) > 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-n.phase2.ctx.Done():
+			return n.phase2.ctx.Err()
+		case <-changed:
+		case <-ticker.C:
+		}
+	}
 }
 
 func (r *phase2Runtime) signalQueueLocked() {
@@ -400,7 +478,10 @@ func (n *Node) dispatchPrepared(ctx context.Context, req tasks.Request) (tasks.R
 			state = tasks.AttemptStateLost
 			executions++
 		}
-		_ = n.finishAttempt(attempt, state, runErr.Error(), "worker_or_transport_lost")
+		retry := req.Idempotent && executions < executionBudget && assignmentsMade < assignmentLimit
+		if err := n.finishAttemptState(attempt, state, runErr.Error(), "worker_or_transport_lost", retry); err != nil {
+			return tasks.Result{}, err
+		}
 		if !req.Idempotent || executions >= executionBudget {
 			break
 		}
@@ -638,6 +719,10 @@ func (n *Node) markAttemptRunning(attempt tasks.TaskAttempt) error {
 }
 
 func (n *Node) finishAttempt(attempt tasks.TaskAttempt, state, detail, interruption string) error {
+	return n.finishAttemptState(attempt, state, detail, interruption, false)
+}
+
+func (n *Node) finishAttemptState(attempt tasks.TaskAttempt, state, detail, interruption string, retry bool) error {
 	now := time.Now().UTC()
 	_, err := n.store.UpdateTask(attempt.TaskID, func(meta *tasks.Metadata) error {
 		current, err := currentAttempt(meta, attempt)
@@ -651,6 +736,10 @@ func (n *Node) finishAttempt(attempt tasks.TaskAttempt, state, detail, interrupt
 		meta.Error = detail
 		meta.InterruptionReason = interruption
 		meta.FinishedAt = &now
+		if retry {
+			meta.Status = tasks.StatusQueued
+			meta.FinishedAt = nil
+		}
 		current.State = state
 		current.UpdatedAt = now
 		current.FinishedAt = &now

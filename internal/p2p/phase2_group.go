@@ -159,7 +159,7 @@ func (n *Node) exchangeWorkerHelloV2(ctx context.Context, coordinatorID peer.ID)
 		if strings.TrimSpace(problem.Code) == "" {
 			problem.Code = "worker_hello_rejected"
 		}
-		return workers.Worker{}, fmt.Errorf("coordinator rejected worker hello (%s)", problem.Code)
+		return workers.Worker{}, &workerProtocolError{Code: problem.Code}
 	}
 	if reply.Type != TypeWorkerHello {
 		return workers.Worker{}, fmt.Errorf("unexpected worker hello response %q", reply.Type)

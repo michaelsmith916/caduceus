@@ -36,6 +36,14 @@ The receiver acknowledges the exact session and sequence. A sequence cannot go
 backward. Once a worker changes session, messages from the retired session are
 rejected. Liveness is based on receiver time, not the advertised timestamp.
 
+An evicted registration returns `worker_not_registered` to a status message.
+The sender retries an authenticated worker hello; if that hello reports
+`session_retired`, it creates a fresh session and registers again. Renewal
+cancels old-session assignments and preserves retired-session fencing. Delayed
+responses for an older session cannot rotate a newer session. Connected,
+authorized peers remain heartbeat targets after registry eviction, so both
+sides can recover from a partition without restarting their processes.
+
 A node fans status heartbeats out concurrently with at most 16 active sends. All sends in one round share the heartbeat-interval deadline. Work still waiting behind the concurrency bound is abandoned when that deadline expires and retried on the next interval; this is bounded fanout, not guaranteed delivery to every peer in every round.
 
 Metric values use `current`, `stale`, `unknown`, or `unsupported`; an absent

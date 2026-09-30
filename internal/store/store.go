@@ -34,6 +34,7 @@ type rootState struct {
 }
 
 type Store struct {
+	requester   string
 	root        string
 	mu          sync.Mutex
 	state       rootState
@@ -43,6 +44,17 @@ type Store struct {
 
 func New(root string) *Store {
 	return &Store{root: root}
+}
+
+// NewForRequester binds recovery to the local authenticated node identity.
+// Worker-side assignments remain history and never enter the requester FIFO.
+func NewForRequester(root, requester string) *Store {
+	return &Store{root: root, requester: strings.TrimSpace(requester)}
+}
+
+func (s *Store) ownsRequest(meta tasks.Metadata) bool {
+	return s.requester == "" || meta.RequesterPeer == s.requester ||
+		(meta.RequesterPeer == "" && (meta.QueueOwner == defaultQueueOwner || meta.QueueOwner == s.requester))
 }
 
 func (s *Store) Init() error {
@@ -99,6 +111,10 @@ func (s *Store) StateVersion() (int, error) {
 func (s *Store) SaveTask(meta tasks.Metadata) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveTaskLocked(meta)
+}
+
+func (s *Store) saveTaskLocked(meta tasks.Metadata) error {
 	if err := s.initLocked(); err != nil {
 		return err
 	}
@@ -122,6 +138,30 @@ func (s *Store) SaveTask(meta tasks.Metadata) error {
 		return err
 	}
 	return writeJSON(filepath.Join(dir, "task.json"), meta)
+}
+
+// UpsertTask validates and mutates one record under the same store lock.
+func (s *Store) UpsertTask(taskID string, fn func(*tasks.Metadata, bool) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.initLocked(); err != nil {
+		return err
+	}
+	if err := validateTaskID(taskID); err != nil {
+		return err
+	}
+	meta, err := s.getTaskLocked(taskID)
+	exists := err == nil
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := fn(&meta, exists); err != nil {
+		return err
+	}
+	if meta.TaskID != taskID {
+		return errors.New("task mutation changed its identity")
+	}
+	return s.saveTaskLocked(meta)
 }
 
 func (s *Store) UpdateTask(taskID string, fn func(*tasks.Metadata) error) (tasks.Metadata, error) {
@@ -548,7 +588,7 @@ func (s *Store) recoverLocked(records map[string]tasks.Metadata) (bool, error) {
 		}
 		if meta.Status == tasks.StatusAccepted || meta.Status == tasks.StatusRunning {
 			meta.InterruptionReason = RestartInterruptionReason
-			if meta.Request.Idempotent && count < meta.Request.EffectiveMaxAttempts() {
+			if s.ownsRequest(meta) && meta.Request.Idempotent && executionAttemptCount(meta) < meta.Request.EffectiveMaxAttempts() {
 				meta.Status = tasks.StatusQueued
 				meta.FinishedAt = nil
 			} else {
@@ -578,7 +618,7 @@ func (s *Store) recoverLocked(records map[string]tasks.Metadata) (bool, error) {
 		if _, duplicate := queued[entry.TaskID]; duplicate {
 			return changed, fmt.Errorf("queue contains duplicate task %q", entry.TaskID)
 		}
-		if meta.Status != tasks.StatusQueued {
+		if meta.Status != tasks.StatusQueued || !s.ownsRequest(meta) {
 			changed = true
 			continue
 		}
@@ -589,7 +629,7 @@ func (s *Store) recoverLocked(records map[string]tasks.Metadata) (bool, error) {
 
 	missing := make([]tasks.Metadata, 0)
 	for taskID, meta := range records {
-		if meta.Status != tasks.StatusQueued {
+		if meta.Status != tasks.StatusQueued || !s.ownsRequest(meta) {
 			continue
 		}
 		if _, ok := queued[taskID]; !ok {
@@ -960,6 +1000,19 @@ func terminalStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func executionAttemptCount(meta tasks.Metadata) int {
+	if len(meta.Attempts) == 0 {
+		return attemptCount(meta)
+	}
+	count := 0
+	for _, attempt := range meta.Attempts {
+		if attempt.State != tasks.AttemptStateRejected {
+			count++
+		}
+	}
+	return count
 }
 
 func attemptCount(meta tasks.Metadata) int {

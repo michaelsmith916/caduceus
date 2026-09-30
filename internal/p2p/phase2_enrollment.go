@@ -164,7 +164,7 @@ func (n *Node) handleEnrollmentStream(stream network.Stream) {
 		_ = n.sendError(encoder, enrollmentErrorCode(err), err.Error())
 		return
 	}
-	if request.Status == enrollment.StatusApproved {
+	if envelope.Type == TypeEnrollmentRequest && request.Status == enrollment.StatusApproved {
 		n.ActivateEnrollment(request)
 	}
 	decision := n.enrollmentDecision(request)

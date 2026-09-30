@@ -754,7 +754,7 @@ func (n *Node) selfWorker(ctx context.Context) workers.Worker {
 	})
 }
 
-func (n *Node) registerWorker(worker workers.Worker, peerID string) {
+func (n *Node) registerWorker(worker workers.Worker, peerID string) error {
 	worker.WorkerID = peerID
 	worker.PeerID = peerID
 	worker.GroupHash = n.groupID()
@@ -768,10 +768,13 @@ func (n *Node) registerWorker(worker workers.Worker, peerID string) {
 		worker.TrustLevel = n.cfg.Security.TrustLevelDefault
 	}
 	if !worker.Allowed {
-		return
+		return errors.New("worker is not authorized")
+	}
+	if err := n.registerPhase2Worker(worker); err != nil {
+		return err
 	}
 	n.setLegacyWorker(worker)
-	n.registerPhase2Worker(worker)
+	return nil
 }
 
 type discoveryNotifee struct {

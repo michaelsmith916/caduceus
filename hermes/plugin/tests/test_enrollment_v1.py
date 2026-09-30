@@ -29,6 +29,7 @@ class FakeContext:
         self.commands = {}
         self.dispatches = []
         self.dispatch_results = dispatch_results or {}
+        self.config_dispatches = []
 
     def register_skill(self, **kwargs):
         self.skills.append(kwargs)
@@ -37,6 +38,9 @@ class FakeContext:
         self.commands[kwargs["name"]] = kwargs
 
     def dispatch_tool(self, name, args):
+        if name == "mcp__caduceus__caduceus_get_local_config":
+            self.config_dispatches.append((name, args))
+            return self.dispatch_results.get(name, control_result({"config": {"enrollment": {"trusted_lan": {"hermes_mode": "invoked"}}}}))
         self.dispatches.append((name, args))
         result = self.dispatch_results.get(name)
         if isinstance(result, list):
@@ -56,6 +60,30 @@ def control_result(data=None, error=None):
 class EnrollmentV1Tests(unittest.TestCase):
     def setUp(self):
         self.plugin = load_plugin()
+
+    def test_disabled_mode_blocks_command_and_direct_adapter_actions(self):
+        for action in ("list", "approve req-mode", "deny req-mode"):
+            with self.subTest(action=action):
+                ctx = FakeContext({self.plugin._ENROLLMENT_V1.CONFIG_TOOL: control_result({"config": {"enrollment": {"trusted_lan": {"hermes_mode": "disabled"}}}})})
+                self.plugin.register(ctx)
+                result = ctx.commands["caduceus-enrollments"]["handler"](action)
+                self.assertIn("disabled", result)
+                self.assertEqual(ctx.dispatches, [])
+                self.assertEqual(len(ctx.config_dispatches), 1)
+
+    def test_unreadable_mode_fails_closed(self):
+        ctx = FakeContext({self.plugin._ENROLLMENT_V1.CONFIG_TOOL: control_result({})})
+        result = self.plugin.EnrollmentV1Adapter(ctx).handle("approve req-mode")
+        self.assertIn("could not be read", result)
+        self.assertEqual(ctx.dispatches, [])
+
+    def test_mode_is_rechecked_for_decision_after_listing(self):
+        ctx = FakeContext({self.plugin.ENROLLMENT_LIST_TOOL: control_result({"requests": []})})
+        adapter = self.plugin.EnrollmentV1Adapter(ctx)
+        adapter.handle("list")
+        ctx.dispatch_results[self.plugin._ENROLLMENT_V1.CONFIG_TOOL] = control_result({"config": {"enrollment": {"trusted_lan": {"hermes_mode": "disabled"}}}})
+        self.assertIn("disabled", adapter.handle("approve req-mode"))
+        self.assertEqual(ctx.dispatches, [(self.plugin.ENROLLMENT_LIST_TOOL, {})])
 
     def test_registers_explicit_enrollment_poll_command(self):
         ctx = FakeContext()

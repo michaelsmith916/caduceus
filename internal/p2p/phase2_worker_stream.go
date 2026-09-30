@@ -32,7 +32,14 @@ func (n *Node) handleWorkerStreamPhase2(stream network.Stream) {
 			_ = n.sendErrorForProtocol(stream.Protocol(), encoder, "bad_payload", err.Error())
 			return
 		}
-		n.registerWorker(worker, remote.String())
+		if err := n.registerWorker(worker, remote.String()); err != nil {
+			code := "invalid_worker"
+			if errors.Is(err, registry.ErrOldSession) {
+				code = "session_retired"
+			}
+			_ = n.sendErrorForProtocol(stream.Protocol(), encoder, code, err.Error())
+			return
+		}
 		reply, err := n.envelopeForProtocol(stream.Protocol(), TypeWorkerHello, n.selfWorker(context.Background()))
 		if err == nil {
 			_ = encoder.Encode(reply)
@@ -55,6 +62,8 @@ func (n *Node) handleWorkerStreamPhase2(stream network.Stream) {
 			code := "invalid_status"
 			if errors.Is(err, registry.ErrOutOfOrder) {
 				code = "out_of_order_status"
+			} else if errors.Is(err, registry.ErrNotRegistered) {
+				code = "worker_not_registered"
 			} else if errors.Is(err, registry.ErrOldSession) || errors.Is(err, registry.ErrSessionMismatch) {
 				code = "stale_session"
 			}

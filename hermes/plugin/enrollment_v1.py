@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+CONFIG_TOOL = "mcp__caduceus__caduceus_get_local_config"
 LIST_TOOL = "mcp__caduceus__caduceus_list_enrollment_requests"
 APPROVE_TOOL = "mcp__caduceus__caduceus_approve_enrollment"
 DENY_TOOL = "mcp__caduceus__caduceus_deny_enrollment"
@@ -177,7 +178,22 @@ class EnrollmentV1Adapter:
             return None, "dispatch_failed"
         return _decode_control_result(result)
 
+    def _mode_error(self) -> str | None:
+        data, error = self._dispatch(CONFIG_TOOL, {})
+        if error:
+            return self._error_message(error)
+        try:
+            mode = data["config"]["enrollment"]["trusted_lan"]["hermes_mode"]
+        except (KeyError, TypeError):
+            return "Caduceus enrollment integration mode could not be read."
+        if mode != "invoked":
+            return "Hermes enrollment integration is disabled on the local Caduceus node."
+        return None
+
     def list_pending(self) -> str:
+        mode_error = self._mode_error()
+        if mode_error:
+            return mode_error
         data, error = self._dispatch(LIST_TOOL, {})
         if error:
             return self._error_message(error)
@@ -222,6 +238,9 @@ class EnrollmentV1Adapter:
         return "\n\n".join(messages)
 
     def decide(self, action: str, request_id: str) -> str:
+        mode_error = self._mode_error()
+        if mode_error:
+            return mode_error
         prior = self._decisions.get(request_id)
         if prior:
             return f'Caduceus enrollment request "{request_id}" is already {prior}.'
@@ -303,6 +322,6 @@ class EnrollmentV1Adapter:
             return "One or more Caduceus enrollment requests have expired."
         if error in {"not_found", "request_not_found"} and request_id:
             return f'Caduceus enrollment request "{request_id}" was not found.'
-        if error in {"disabled", "enrollment_disabled"}:
+        if error in {"disabled", "enrollment_disabled", "hermes_mode_disabled"}:
             return "Trusted-LAN enrollment is disabled on the local Caduceus node."
         return f"Caduceus enrollment operation failed (safe code: {error})."
