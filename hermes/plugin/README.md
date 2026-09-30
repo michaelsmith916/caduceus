@@ -9,6 +9,23 @@ that improve discovery and safe use.
 - Registers the instruction-only `caduceus:remote-prompt-delegation` skill.
 - Registers `/caduceus-status`, which calls the Caduceus MCP status tool.
 - Adds no Python dependencies and does not duplicate the Caduceus API.
+- Registers `/caduceus-enrollments`, which explicitly polls for pending
+  registrations and approves or denies a selected request through MCP.
+
+Hermes's verified plugin API has no unsolicited registration hook, so this
+command runs only when invoked and does not poll in the background:
+
+```text
+/caduceus-enrollments
+/caduceus-enrollments approve req-example-1
+/caduceus-enrollments deny req-example-1
+```
+
+Pending metadata is untrusted and sanitized. The command never displays an
+invitation token, group material, credentials, or unknown response fields. It
+suppresses duplicate prompts for the current Hermes process and refuses to
+present an expired request for approval. The exact contract is documented in
+[ENROLLMENT-V1.md](ENROLLMENT-V1.md).
 
 The plugin does not start `caduceusd`, install Caduceus, or modify Hermes
 configuration during import.

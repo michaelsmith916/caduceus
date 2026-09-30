@@ -133,6 +133,13 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		}
 		_ = json.Unmarshal(args, &p)
 		resp, err = s.client.GetWorker(ctx, p.WorkerID)
+	case "caduceus.explain_route":
+		req, e := decodeTaskRequest(args)
+		if e != nil {
+			resp = control.Failure("bad_request", e.Error(), nil)
+		} else {
+			resp, err = s.client.ExplainRoute(ctx, req)
+		}
 	case "caduceus.run_remote_task":
 		req, e := decodeRunTask(args)
 		if e != nil {
@@ -179,6 +186,40 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		} else {
 			resp, err = s.client.ValidateTask(ctx, req)
 		}
+	case "caduceus.list_enrollment_requests":
+		if e := decodeEmptyArguments(args); e != nil {
+			resp = control.Failure("bad_request", e.Error(), nil)
+		} else {
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) { return s.client.ListEnrollmentRequests(ctx) })
+		}
+	case "caduceus.approve_enrollment":
+		var p struct {
+			RequestID  string `json:"request_id"`
+			ApprovedBy string `json:"approved_by"`
+		}
+		if e := decodeArguments(args, &p); e != nil {
+			resp = control.Failure("bad_request", e.Error(), nil)
+		} else if strings.TrimSpace(p.RequestID) == "" {
+			resp = control.Failure("bad_request", "request_id is required", nil)
+		} else {
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) {
+				return s.client.ApproveEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.ApprovedBy))
+			})
+		}
+	case "caduceus.deny_enrollment":
+		var p struct {
+			RequestID string `json:"request_id"`
+			DeniedBy  string `json:"denied_by"`
+		}
+		if e := decodeArguments(args, &p); e != nil {
+			resp = control.Failure("bad_request", e.Error(), nil)
+		} else if strings.TrimSpace(p.RequestID) == "" {
+			resp = control.Failure("bad_request", "request_id is required", nil)
+		} else {
+			resp, err = s.enrollmentTool(ctx, func() (control.Response, error) {
+				return s.client.DenyEnrollment(ctx, strings.TrimSpace(p.RequestID), strings.TrimSpace(p.DeniedBy))
+			})
+		}
 	default:
 		return nil, fmt.Errorf("unknown tool %q", name)
 	}
@@ -191,6 +232,35 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		"structuredContent": resp,
 		"isError":           !resp.OK,
 	}, nil
+}
+
+// Check the daemon configuration on every invocation, including calls made
+// directly through MCP rather than through the Hermes command adapter.
+func (s *Server) enrollmentTool(ctx context.Context, action func() (control.Response, error)) (control.Response, error) {
+	response, err := s.client.Config(ctx)
+	if err != nil || !response.OK {
+		return response, err
+	}
+	data, err := json.Marshal(response.Data)
+	if err != nil {
+		return control.Failure("invalid_config", "could not read integration mode", nil), nil
+	}
+	var settings struct {
+		Config struct {
+			Enrollment struct {
+				TrustedLAN struct {
+					HermesMode string `json:"hermes_mode"`
+				} `json:"trusted_lan"`
+			} `json:"enrollment"`
+		} `json:"config"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil || settings.Config.Enrollment.TrustedLAN.HermesMode == "" {
+		return control.Failure("invalid_config", "could not read integration mode", nil), nil
+	}
+	if settings.Config.Enrollment.TrustedLAN.HermesMode != "invoked" {
+		return control.Failure("hermes_mode_disabled", "Hermes enrollment integration is disabled", nil), nil
+	}
+	return action()
 }
 
 func (s *Server) readResource(ctx context.Context, uri string) (any, error) {
@@ -227,41 +297,76 @@ func (s *Server) readResource(ctx context.Context, uri string) (any, error) {
 
 func decodeRunTask(args json.RawMessage) (control.RunTaskRequest, error) {
 	var req control.RunTaskRequest
-	if len(args) == 0 {
-		return req, errors.New("arguments are required")
-	}
-	if err := json.Unmarshal(args, &req); err != nil {
+	if err := decodeArguments(args, &req); err != nil {
 		return req, err
 	}
-	if req.Task.Prompt == "" {
-		return req, errors.New("task.prompt is required")
+	if strings.TrimSpace(req.Kind) == "" {
+		req.Kind = tasks.KindPrompt
+	}
+	if err := tasks.ValidateRequest(taskRequest(req)); err != nil {
+		return req, err
 	}
 	return req, nil
 }
 
+func decodeTaskRequest(args json.RawMessage) (tasks.Request, error) {
+	req, err := decodeRunTask(args)
+	if err != nil {
+		return tasks.Request{}, err
+	}
+	return taskRequest(req), nil
+}
+
+func taskRequest(req control.RunTaskRequest) tasks.Request {
+	return tasks.Request{
+		TaskID:         req.TaskID,
+		Kind:           req.Kind,
+		Task:           req.Task,
+		Constraints:    req.Constraints,
+		TimeoutSeconds: req.TimeoutSeconds,
+		TrustLevel:     req.TrustLevel,
+		WorkerID:       req.WorkerID,
+		Idempotent:     req.Idempotent,
+		MaxAttempts:    req.MaxAttempts,
+	}
+}
+
 func decodeRunPrompt(args json.RawMessage) (control.RunTaskRequest, error) {
 	var p struct {
-		WorkerID       string   `json:"worker_id"`
-		Prompt         string   `json:"prompt"`
-		System         string   `json:"system"`
-		Model          string   `json:"model"`
-		Temperature    *float64 `json:"temperature"`
-		MaxTokens      int      `json:"max_tokens"`
-		Stream         *bool    `json:"stream"`
-		TimeoutSeconds int      `json:"timeout_seconds"`
-		TrustLevel     string   `json:"trust_level"`
+		TaskID         string            `json:"task_id"`
+		Kind           string            `json:"kind"`
+		WorkerID       string            `json:"worker_id"`
+		Prompt         string            `json:"prompt"`
+		System         string            `json:"system"`
+		Model          string            `json:"model"`
+		Temperature    *float64          `json:"temperature"`
+		MaxTokens      int               `json:"max_tokens"`
+		Stream         *bool             `json:"stream"`
+		TimeoutSeconds int               `json:"timeout_seconds"`
+		TrustLevel     string            `json:"trust_level"`
+		Constraints    tasks.Constraints `json:"constraints"`
+		Idempotent     bool              `json:"idempotent"`
+		MaxAttempts    int               `json:"max_attempts"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
+	if err := decodeArguments(args, &p); err != nil {
 		return control.RunTaskRequest{}, err
 	}
 	if strings.TrimSpace(p.Prompt) == "" {
 		return control.RunTaskRequest{}, errors.New("prompt is required")
 	}
+	if strings.TrimSpace(p.Kind) == "" {
+		p.Kind = tasks.KindPrompt
+	}
+	if !containsString(p.Constraints.RequiredCapabilities, "llm") {
+		p.Constraints.RequiredCapabilities = append(p.Constraints.RequiredCapabilities, "llm")
+	}
 	stream := true
 	if p.Stream != nil {
 		stream = *p.Stream
 	}
-	return control.RunTaskRequest{
+	req := control.RunTaskRequest{
+		TaskID:   p.TaskID,
+		Kind:     p.Kind,
 		WorkerID: p.WorkerID,
 		Task: tasks.PromptTask{
 			Prompt:      p.Prompt,
@@ -271,10 +376,58 @@ func decodeRunPrompt(args json.RawMessage) (control.RunTaskRequest, error) {
 			MaxTokens:   p.MaxTokens,
 			Stream:      stream,
 		},
-		Constraints:    tasks.Constraints{RequiredCapabilities: []string{"llm"}},
+		Constraints:    p.Constraints,
 		TimeoutSeconds: p.TimeoutSeconds,
 		TrustLevel:     p.TrustLevel,
-	}, nil
+		Idempotent:     p.Idempotent,
+		MaxAttempts:    p.MaxAttempts,
+	}
+	if err := tasks.ValidateRequest(taskRequest(req)); err != nil {
+		return control.RunTaskRequest{}, err
+	}
+	return req, nil
+}
+
+func decodeArguments(args json.RawMessage, target any) error {
+	if len(bytes.TrimSpace(args)) == 0 {
+		return errors.New("arguments are required")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(args))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values are not allowed")
+		}
+		return err
+	}
+	return nil
+}
+
+func decodeEmptyArguments(args json.RawMessage) error {
+	if len(bytes.TrimSpace(args)) == 0 {
+		return nil
+	}
+	var values map[string]json.RawMessage
+	if err := decodeArguments(args, &values); err != nil {
+		return err
+	}
+	if len(values) != 0 {
+		return errors.New("this tool does not accept arguments")
+	}
+	return nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func getStringArg(args json.RawMessage, key string) string {

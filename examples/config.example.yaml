@@ -6,6 +6,7 @@ node:
   enable_mdns: true
 
 security:
+  # A routing namespace/filter, not authentication or a shared credential.
   p2p_key_hash: ""
   p2p_key_path: "~/.config/caduceus/p2p.key"
   allowed_peers_path: "~/.config/caduceus/allowed-peers.yaml"
@@ -16,11 +17,59 @@ worker:
   enabled: true
   labels: ["laptop"]
   max_concurrent_tasks: 1
+  # Zero means reject when execution permits are full; it is not unlimited.
+  max_queue_depth: 0
+  cost_weight: 1.0
+  availability:
+    mode: "always"
+    manual_available: true
+    idle_after_seconds: 0
+    timezone: "America/Los_Angeles"
+    schedule: []
   capabilities:
     llm: true
     streaming: true
     artifacts: true
     tools: ["run_remote_prompt"]
+
+heartbeat:
+  interval_seconds: 10
+  suspect_after_seconds: 30
+  evict_after_seconds: 90
+  lease_seconds: 120
+
+scheduler:
+  weights:
+    throughput: 0.20
+    running_tasks: 0.20
+    queue_depth: 0.15
+    model_residency: 0.20
+    rtt: 0.10
+    cost: 0.05
+    resource_headroom: 0.10
+  minimum_metric_samples: 3
+  metric_max_age_seconds: 60
+  max_reroute_attempts: 3
+  max_in_flight_tasks: 64
+  max_queue_depth: 1024
+  score_epsilon: 0.000000001
+
+enrollment:
+  trusted_lan:
+    # Opt in only on an intended trusted-LAN coordinator.
+    enabled: false
+    coordinator_address: ""
+    hermes_mode: "invoked"
+    request_ttl_seconds: 300
+    token_ttl_seconds: 600
+    require_approval: true
+    allowed_networks:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+      - "fd00::/8"
+    rate_limit: 10
+    rate_window_seconds: 60
 
 openai:
   base_url: "http://127.0.0.1:11434/v1"

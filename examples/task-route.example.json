@@ -1,0 +1,21 @@
+{
+  "task_id": "task-route-example",
+  "kind": "prompt",
+  "task": {
+    "prompt": "Summarize why deterministic scheduling helps operators.",
+    "model": "qwen3.5:9b",
+    "max_tokens": 256,
+    "stream": true
+  },
+  "constraints": {
+    "required_capabilities": ["llm"],
+    "required_model": "qwen3.5:9b",
+    "min_cpu": 0.5,
+    "min_ram_bytes": 1073741824,
+    "required_trust_level": "trusted-lan"
+  },
+  "timeout_seconds": 300,
+  "trust_level": "trusted-lan",
+  "idempotent": true,
+  "max_attempts": 2
+}

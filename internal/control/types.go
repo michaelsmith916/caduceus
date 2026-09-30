@@ -24,11 +24,15 @@ type APIError struct {
 }
 
 type RunTaskRequest struct {
+	TaskID         string            `json:"task_id,omitempty"`
+	Kind           string            `json:"kind,omitempty"`
 	WorkerID       string            `json:"worker_id,omitempty"`
 	Task           tasks.PromptTask  `json:"task"`
 	Constraints    tasks.Constraints `json:"constraints,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 	TrustLevel     string            `json:"trust_level,omitempty"`
+	Idempotent     bool              `json:"idempotent,omitempty"`
+	MaxAttempts    int               `json:"max_attempts,omitempty"`
 }
 
 type ListTasksFilter struct {

@@ -20,13 +20,16 @@ const (
 )
 
 type Config struct {
-	Node     NodeConfig     `json:"node" yaml:"node"`
-	Security SecurityConfig `json:"security" yaml:"security"`
-	Worker   WorkerConfig   `json:"worker" yaml:"worker"`
-	OpenAI   OpenAIConfig   `json:"openai" yaml:"openai"`
-	Control  ControlConfig  `json:"control" yaml:"control"`
-	Logging  LoggingConfig  `json:"logging" yaml:"logging"`
-	Storage  StorageConfig  `json:"storage" yaml:"storage"`
+	Node       NodeConfig       `json:"node" yaml:"node"`
+	Security   SecurityConfig   `json:"security" yaml:"security"`
+	Worker     WorkerConfig     `json:"worker" yaml:"worker"`
+	Heartbeat  HeartbeatConfig  `json:"heartbeat" yaml:"heartbeat"`
+	Scheduler  SchedulerConfig  `json:"scheduler" yaml:"scheduler"`
+	Enrollment EnrollmentConfig `json:"enrollment" yaml:"enrollment"`
+	OpenAI     OpenAIConfig     `json:"openai" yaml:"openai"`
+	Control    ControlConfig    `json:"control" yaml:"control"`
+	Logging    LoggingConfig    `json:"logging" yaml:"logging"`
+	Storage    StorageConfig    `json:"storage" yaml:"storage"`
 }
 
 type NodeConfig struct {
@@ -50,6 +53,9 @@ type WorkerConfig struct {
 	Enabled            bool               `json:"enabled" yaml:"enabled"`
 	Labels             []string           `json:"labels" yaml:"labels"`
 	MaxConcurrentTasks int                `json:"max_concurrent_tasks" yaml:"max_concurrent_tasks"`
+	MaxQueueDepth      int                `json:"max_queue_depth" yaml:"max_queue_depth"`
+	CostWeight         float64            `json:"cost_weight" yaml:"cost_weight"`
+	Availability       AvailabilityConfig `json:"availability" yaml:"availability"`
 	Capabilities       WorkerCapabilities `json:"capabilities" yaml:"capabilities"`
 }
 
@@ -163,11 +169,52 @@ func Default() (Config, error) {
 			Enabled:            true,
 			Labels:             []string{},
 			MaxConcurrentTasks: 1,
+			MaxQueueDepth:      0,
+			CostWeight:         1,
+			Availability: AvailabilityConfig{
+				Mode:            AvailabilityAlways,
+				ManualAvailable: true,
+			},
 			Capabilities: WorkerCapabilities{
 				LLM:       true,
 				Streaming: true,
 				Artifacts: true,
 				Tools:     []string{"run_remote_prompt"},
+			},
+		},
+		Heartbeat: HeartbeatConfig{
+			IntervalSeconds:     10,
+			SuspectAfterSeconds: 30,
+			EvictAfterSeconds:   90,
+			LeaseSeconds:        120,
+		},
+		Scheduler: SchedulerConfig{
+			Weights: SchedulerWeights{
+				Throughput:       0.20,
+				RunningTasks:     0.20,
+				QueueDepth:       0.15,
+				ModelResidency:   0.20,
+				RTT:              0.10,
+				Cost:             0.05,
+				ResourceHeadroom: 0.10,
+			},
+			MinimumMetricSamples: 3,
+			MetricMaxAgeSeconds:  60,
+			MaxRerouteAttempts:   3,
+			MaxInFlightTasks:     64,
+			MaxQueueDepth:        1024,
+			ScoreEpsilon:         0.000000001,
+		},
+		Enrollment: EnrollmentConfig{
+			TrustedLAN: TrustedLANEnrollmentConfig{
+				HermesMode:        "invoked",
+				Enabled:           false,
+				RequestTTLSeconds: 300,
+				TokenTTLSeconds:   600,
+				RequireApproval:   true,
+				AllowedNetworks:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fd00::/8"},
+				RateLimit:         10,
+				RateWindowSeconds: 60,
 			},
 		},
 		OpenAI: OpenAIConfig{
@@ -208,6 +255,9 @@ func Load(path string) (Config, string, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			cfg.ApplyEnv()
+			if err := cfg.Validate(); err != nil {
+				return Config{}, "", err
+			}
 			return cfg, path, nil
 		}
 		return Config{}, "", err
@@ -221,10 +271,16 @@ func Load(path string) (Config, string, error) {
 	}
 	cfg.ApplyEnv()
 	cfg.applyDerivedDefaults(paths)
+	if err := cfg.Validate(); err != nil {
+		return Config{}, "", fmt.Errorf("validate config %s: %w", path, err)
+	}
 	return cfg, path, nil
 }
 
 func Save(path string, cfg Config) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(path) == "" {
 		paths, err := DefaultPaths()
 		if err != nil {
@@ -326,9 +382,6 @@ func (c *Config) applyDerivedDefaults(paths Paths) {
 	if c.OpenAI.TimeoutSeconds <= 0 {
 		c.OpenAI.TimeoutSeconds = 300
 	}
-	if c.Worker.MaxConcurrentTasks <= 0 {
-		c.Worker.MaxConcurrentTasks = 1
-	}
 	if c.Worker.Capabilities.Tools == nil {
 		c.Worker.Capabilities.Tools = []string{"run_remote_prompt"}
 	}
@@ -361,9 +414,33 @@ func (c Config) OpenAITimeout() time.Duration {
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	file, err := os.CreateTemp(directory, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+	if err := file.Chmod(mode); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := replaceFileAtomic(tempPath, path); err != nil {
+		return err
+	}
+	return syncParentDirectory(directory)
 }

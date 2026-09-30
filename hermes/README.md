@@ -1,8 +1,8 @@
 # Caduceus for Hermes Agent
 
 Caduceus integrates with Hermes Agent as an installable plugin backed by the
-native `caduceus-mcp` server. The plugin supplies Hermes-native guidance and a
-connectivity command; MCP remains the single transport for Caduceus tools.
+native `caduceus-mcp` server. The plugin supplies Hermes-native guidance plus
+status and enrollment commands; MCP remains the single tool transport.
 
 Verified with [Hermes Agent v0.18.2](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.7.7.2).
 Use a current Caduceus build: older `caduceus-mcp` binaries that only support
@@ -12,15 +12,19 @@ Use a current Caduceus build: older `caduceus-mcp` binaries that only support
 |---|---|---|
 | `caduceusd` | Persistent process | LAN discovery, workers, tasks, and local control API |
 | `caduceus-mcp` | Child process started by Hermes | MCP tools and resources over stdio |
-| Caduceus Hermes plugin | In the Hermes process | Delegation skill and `/caduceus-status` |
+| Caduceus Hermes plugin | In the Hermes process | Delegation skill and explicit status/enrollment commands |
 
 The plugin deliberately does not reimplement Caduceus tools in Python, start
-the daemon, or edit configuration during import.
+the daemon, or edit configuration during import. Hermes exposes no unsolicited
+registration hook, so enrollment review is an invoked command rather than a
+background notification.
 
 ## What the plugin installs
 
 - The instruction-only `caduceus:remote-prompt-delegation` skill.
 - `/caduceus-status`, a slash command that calls the MCP status tool.
+- `/caduceus-enrollments`, an explicit poll plus request-specific approve/deny
+  command with sanitized output and per-session duplicate suppression.
 - Post-install instructions for connecting Hermes to `caduceus-mcp`.
 
 The skill is bundled with the plugin, so it does not require a second install

@@ -34,6 +34,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/v1/tasks", s.wrap(s.handleTasks))
 	mux.HandleFunc("/v1/tasks/run", s.wrap(s.handleRunTask))
 	mux.HandleFunc("/v1/tasks/validate", s.wrap(s.handleValidateTask))
+	mux.HandleFunc("/v1/route/explain", s.wrap(s.handleExplainRoute))
+	mux.HandleFunc("/v1/enrollment/invitations", s.wrap(s.handleEnrollmentInvitations))
+	mux.HandleFunc("/v1/enrollment/requests", s.wrap(s.handleEnrollmentRequests))
+	mux.HandleFunc("/v1/enrollment/requests/", s.wrap(s.handleEnrollmentRequests))
+	mux.HandleFunc("/v1/enrollment/audit", s.wrap(s.handleEnrollmentAudit))
+	mux.HandleFunc("/v1/enrollment/submit", s.wrap(s.handleEnrollmentSubmit))
+	mux.HandleFunc("/v1/enrollment/status", s.wrap(s.handleEnrollmentStatus))
 	mux.HandleFunc("/v1/tasks/", s.wrap(s.handleTaskSubresource))
 
 	network, address, err := listenTarget(s.endpoint)
@@ -209,12 +216,24 @@ func statusFor(err *APIError) int {
 	switch err.Code {
 	case "bad_request":
 		return http.StatusBadRequest
+	case "source_not_allowed", "enrollment_rejected":
+		return http.StatusForbidden
 	case "unauthorized":
 		return http.StatusUnauthorized
 	case "not_found":
 		return http.StatusNotFound
+	case "request_expired":
+		return http.StatusGone
+	case "invalid_state":
+		return http.StatusConflict
+	case "rate_limited":
+		return http.StatusTooManyRequests
 	case "method_not_allowed":
 		return http.StatusMethodNotAllowed
+	case "not_supported":
+		return http.StatusNotImplemented
+	case "enrollment_disabled":
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}
