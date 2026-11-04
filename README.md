@@ -113,6 +113,9 @@ Caduceus is for trusted LANs. A routing group hash is not an authentication cred
 
 ## Documentation
 
+- [Architecture and system diagrams](docs/architecture.md)
+- [System communication map](docs/diagrams/caduceus-system.svg) ([PNG](docs/diagrams/caduceus-system.png))
+- [Internal components, feedback, and enrollment](docs/diagrams/caduceus-components.svg) ([PNG](docs/diagrams/caduceus-components.png))
 - [Phase 2 architecture and acceptance criteria](docs/phase-2.md)
 - [Protocol generation 2](docs/protocol-v2.md)
 - [Configuration](docs/configuration.md)

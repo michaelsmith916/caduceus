@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1860" viewBox="0 0 2400 1860" role="img" aria-labelledby="title desc"><title id="title">Caduceus — system communication map</title><desc id="desc">Hermes and other MCP clients communicate through caduceus-mcp and a local HTTP control API with a requester daemon. The CLI uses the same control API. Symmetric daemons exchange tasks, cancellation, events, results and worker status over Noise-secured libp2p. Each daemon can execute prompt work using an OpenAI-compatible model backend and persists local state. LAN mDNS discovers peer addresses; peer trust is enforced separately.</desc>
+<rect x="0" y="0" width="2400" height="1860" rx="0" fill="#F5F7FB" stroke="none" stroke-width="0"/>
+<rect x="60" y="55" width="8" height="99" rx="4" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="90" y="100" font-family="Segoe UI,Arial,sans-serif" font-size="51" font-weight="600" text-anchor="start" fill="#142438">Caduceus — system communication map</text>
+<text x="90" y="146" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="400" text-anchor="start" fill="#526278">Local-first LLM worker fabric · Windows, Linux/WSL and macOS · every daemon can request and execute</text>
+<polyline points="90,202 165,202" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="165.00,202.00 150.00,196.00 150.00,208.00" fill="#245EC4"/>
+<text x="185" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Request / control</text>
+<polyline points="510,202 585,202" fill="none" stroke="#147D77" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="585.00,202.00 570.00,196.00 570.00,208.00" fill="#147D77"/>
+<text x="605" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Response / result</text>
+<polyline points="940,202 1015,202" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1015.00,202.00 1000.00,196.00 1000.00,208.00" fill="#7850A8"/>
+<text x="1035" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Discovery / status / supporting state</text>
+<text x="2330" y="209" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="600" text-anchor="end" fill="#526278">PHASE 2  ·  v0.2.0</text>
+<rect x="70" y="280" width="650" height="180" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="71" y="297" width="5" height="146" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="96" y="323" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Hermes Agent</text>
+<text x="96" y="361" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Caduceus plugin: delegation guidance</text>
+<text x="96" y="394" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">/caduceus-status · /caduceus-enrollments</text>
+<text x="96" y="427" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Invoked commands use MCP tools</text>
+<rect x="800" y="280" width="540" height="180" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="801" y="297" width="5" height="146" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="826" y="323" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Other MCP clients</text>
+<text x="826" y="361" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Agent or assistant application</text>
+<text x="826" y="394" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Tools + resources via stdio</text>
+<text x="826" y="427" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">No Hermes plugin required</text>
+<rect x="1630" y="280" width="700" height="180" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1631" y="297" width="5" height="146" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="1656" y="323" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Operator · caduceusctl</text>
+<text x="1656" y="361" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Status · workers · routing · tasks · enrollment</text>
+<text x="1656" y="394" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Runtime commands use local control API</text>
+<text x="1656" y="427" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">init / key / peers also manage setup files</text>
+<polyline points="395,460 395,515 560,515 560,570" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="560.00,570.00 566.00,555.00 554.00,555.00" fill="#245EC4"/>
+<polygon points="395.00,460.00 389.00,475.00 401.00,475.00" fill="#245EC4"/>
+<polyline points="1070,460 1070,515 860,515 860,570" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="860.00,570.00 866.00,555.00 854.00,555.00" fill="#245EC4"/>
+<polygon points="1070.00,460.00 1064.00,475.00 1076.00,475.00" fill="#245EC4"/>
+<text x="735" y="541" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="middle" fill="#245EC4">MCP JSON-RPC over stdio</text>
+<rect x="360" y="570" width="700" height="130" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="361" y="587" width="5" height="96" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="386" y="613" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">caduceus-mcp</text>
+<text x="386" y="651" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Native tool/resource bridge · started by MCP client</text>
+<text x="380" y="758" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="middle" fill="#245EC4">Local HTTP control API</text>
+<text x="380" y="789" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#526278">Linux/macOS: Unix socket</text>
+<text x="380" y="817" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#526278">Windows: loopback + token</text>
+<text x="1480" y="704" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="middle" fill="#245EC4">Same local control API</text>
+<rect x="70" y="825" width="1050" height="655" rx="18" fill="#EAF0F8" stroke="#CBD5E1" stroke-width="2"/>
+<text x="98" y="868" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">MACHINE A · requester for this task</text>
+<text x="98" y="903" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Started manually or by the operating-system service</text>
+<rect x="1420" y="825" width="910" height="655" rx="18" fill="#EAF0F8" stroke="#CBD5E1" stroke-width="2"/>
+<text x="1448" y="868" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">MACHINE B · selected worker</text>
+<text x="1448" y="903" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Same daemon and capabilities; roles can reverse</text>
+<rect x="110" y="940" width="970" height="195" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="111" y="957" width="5" height="161" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="136" y="983" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">caduceusd</text>
+<text x="136" y="1021" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Local control → durable requester FIFO → scheduler</text>
+<text x="136" y="1054" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Dispatch + attempt tracking + cancellation + safe failover</text>
+<text x="136" y="1087" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">May choose its own local worker instead of a peer</text>
+<rect x="1460" y="940" width="830" height="195" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1461" y="957" width="5" height="161" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="1486" y="983" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">caduceusd</text>
+<text x="1486" y="1021" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Peer authentication → worker admission → prompt execution</text>
+<text x="1486" y="1054" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Enforces concurrency, resource checks and bounded waiting</text>
+<text x="1486" y="1087" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Returns task events, token deltas, result and usage</text>
+<polyline points="640,700 640,815 820,815 820,940" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="820.00,940.00 826.00,925.00 814.00,925.00" fill="#245EC4"/>
+<polygon points="640.00,700.00 634.00,715.00 646.00,715.00" fill="#245EC4"/>
+<polyline points="1980,460 1980,724 1000,724 1000,940" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1000.00,940.00 1006.00,925.00 994.00,925.00" fill="#245EC4"/>
+<polygon points="1980.00,460.00 1974.00,475.00 1986.00,475.00" fill="#245EC4"/>
+<text x="1270" y="897" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="400" text-anchor="middle" fill="#142438">libp2p + Noise</text>
+<polyline points="1080,1000 1460,1000" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1460.00,1000.00 1445.00,994.00 1445.00,1006.00" fill="#245EC4"/>
+<text x="1270" y="974" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#245EC4">assign task / cancel</text>
+<polyline points="1460,1090 1080,1090" fill="none" stroke="#147D77" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1080.00,1090.00 1095.00,1096.00 1095.00,1084.00" fill="#147D77"/>
+<text x="1270" y="1128" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#147D77">accept / reject / events / result</text>
+<rect x="110" y="1260" width="530" height="130" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="111" y="1277" width="5" height="96" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="136" y="1303" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Local model backend</text>
+<text x="136" y="1341" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Ollama or OpenAI-compatible HTTP API</text>
+<rect x="730" y="1260" width="350" height="130" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="731" y="1277" width="5" height="96" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="756" y="1303" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Local files</text>
+<text x="756" y="1341" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Identity · trust · task state</text>
+<rect x="1460" y="1260" width="480" height="130" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1461" y="1277" width="5" height="96" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="1486" y="1303" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Model backend</text>
+<text x="1486" y="1341" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Ollama / compatible HTTP API</text>
+<rect x="2020" y="1260" width="270" height="130" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="2021" y="1277" width="5" height="96" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="2046" y="1303" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Local files</text>
+<text x="2046" y="1341" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Identity · state</text>
+<polyline points="375,1135 375,1260" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="375.00,1260.00 381.00,1245.00 369.00,1245.00" fill="#245EC4"/>
+<polygon points="375.00,1135.00 369.00,1150.00 381.00,1150.00" fill="#245EC4"/>
+<text x="375" y="1202" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#245EC4">If local worker selected</text>
+<polyline points="900,1135 900,1260" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="900.00,1260.00 906.00,1245.00 894.00,1245.00" fill="#7850A8"/>
+<polygon points="900.00,1135.00 894.00,1150.00 906.00,1150.00" fill="#7850A8"/>
+<text x="900" y="1202" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#7850A8">Read / persist</text>
+<polyline points="1700,1135 1700,1260" fill="none" stroke="#147D77" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1700.00,1260.00 1706.00,1245.00 1694.00,1245.00" fill="#147D77"/>
+<polygon points="1700.00,1135.00 1694.00,1150.00 1706.00,1150.00" fill="#147D77"/>
+<text x="1700" y="1202" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#147D77">HTTP request / token stream</text>
+<polyline points="2155,1135 2155,1260" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="2155.00,1260.00 2161.00,1245.00 2149.00,1245.00" fill="#7850A8"/>
+<polygon points="2155.00,1135.00 2149.00,1150.00 2161.00,1150.00" fill="#7850A8"/>
+<text x="2155" y="1202" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#7850A8">Read / persist</text>
+<text x="110" y="1442" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Same-node backend default: http://127.0.0.1:11434/v1</text>
+<text x="1460" y="1442" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Backend location is configurable; models run outside the daemon.</text>
+<rect x="70" y="1560" width="2260" height="165" rx="18" fill="#E8F3F1" stroke="none" stroke-width="2"/>
+<text x="105" y="1605" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">TRUSTED LAN · mDNS + peer membership</text>
+<text x="105" y="1645" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">mDNS finds peer addresses; worker hello and ordered heartbeats populate each local registry.</text>
+<text x="105" y="1679" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Additional trusted nodes run the same daemon, local model client and local state.</text>
+<text x="1460" y="1608" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="600" text-anchor="start" fill="#142438">Discovery does not grant permission.</text>
+<text x="1460" y="1648" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Normal peer traffic requires identity, allowlist and routing-group checks.</text>
+<text x="1460" y="1681" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Enrollment is an optional, separate approval path — see the next map.</text>
+<polyline points="590,1480 590,1560" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="590.00,1560.00 596.00,1545.00 584.00,1545.00" fill="#7850A8"/>
+<polygon points="590.00,1480.00 584.00,1495.00 596.00,1495.00" fill="#7850A8"/>
+<polyline points="1875,1480 1875,1560" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1875.00,1560.00 1881.00,1545.00 1869.00,1545.00" fill="#7850A8"/>
+<polygon points="1875.00,1480.00 1869.00,1495.00 1881.00,1495.00" fill="#7850A8"/>
+<text x="590" y="1528" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#7850A8">Discovery + worker status</text>
+<text x="1875" y="1528" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#7850A8">Discovery + worker status</text>
+<text x="70" y="1784" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="400" text-anchor="start" fill="#142438">No central server, database, DHT or relay. Each requester coordinates its own tasks; every worker controls its own admission.</text>
+<text x="70" y="1825" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="start" fill="#526278">Source-checked architecture · repository eaf9343 · 4 November 2026 · component detail and optional enrollment in diagram 2</text>
+</svg>
