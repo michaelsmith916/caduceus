@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="2420" viewBox="0 0 2560 2420" role="img" aria-labelledby="title desc"><title id="title">Caduceus — components inside every daemon</title><desc id="desc">Component diagram with task coordination, deterministic scheduler, ephemeral worker registry, P2P task transport, worker admission, prompt executor, OpenAI-compatible client, file store, availability policy, telemetry, ordered heartbeats, optional enrollment, allowlist, libp2p identity and cross-cutting configuration and logging. Solid arrows show calls or results. Dashed arrows show supporting state. The three panels share the same daemon runtime.</desc>
+<rect x="0" y="0" width="2560" height="2420" rx="0" fill="#F5F7FB" stroke="none" stroke-width="0"/>
+<rect x="60" y="55" width="8" height="99" rx="4" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="90" y="100" font-family="Segoe UI,Arial,sans-serif" font-size="51" font-weight="600" text-anchor="start" fill="#142438">Caduceus — components inside every daemon</text>
+<text x="90" y="146" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="400" text-anchor="start" fill="#526278">Logical components within one caduceusd process · the same runtime is present on requester and worker nodes</text>
+<polyline points="90,202 165,202" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="165.00,202.00 150.00,196.00 150.00,208.00" fill="#245EC4"/>
+<text x="185" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Request / control</text>
+<polyline points="510,202 585,202" fill="none" stroke="#147D77" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="585.00,202.00 570.00,196.00 570.00,208.00" fill="#147D77"/>
+<text x="605" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Response / result</text>
+<polyline points="940,202 1015,202" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1015.00,202.00 1000.00,196.00 1000.00,208.00" fill="#7850A8"/>
+<text x="1035" y="210" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Discovery / status / supporting state</text>
+<text x="2490" y="209" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="600" text-anchor="end" fill="#526278">PHASE 2  ·  v0.2.0</text>
+<rect x="50" y="255" width="2460" height="1025" rx="18" fill="#EAF0F8" stroke="#CBD5E1" stroke-width="2"/>
+<text x="78" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">01   TASK CONTROL AND EXECUTION</text>
+<rect x="80" y="355" width="420" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="81" y="372" width="5" height="141" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="106" y="398" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Local control + app</text>
+<text x="106" y="436" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">HTTP JSON API / bearer token</text>
+<text x="106" y="469" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Task validation + operations</text>
+<text x="106" y="502" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Workers · config · stored reads</text>
+<rect x="640" y="355" width="560" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="372" width="5" height="141" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="666" y="398" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Requester coordinator</text>
+<text x="666" y="436" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Durable FIFO + dispatch-slot bound</text>
+<text x="666" y="469" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Cancellation + restart reconciliation</text>
+<text x="666" y="502" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Owns task and attempt lifecycle</text>
+<rect x="1340" y="355" width="490" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="372" width="5" height="141" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="1366" y="398" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Deterministic scheduler</text>
+<text x="1366" y="436" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Hard filters → weighted score</text>
+<text x="1366" y="469" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Fresh snapshot + stable tie-break</text>
+<text x="1366" y="502" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Decision + route explanation</text>
+<rect x="1970" y="355" width="510" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1971" y="372" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1996" y="398" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Worker registry</text>
+<text x="1996" y="436" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Live sessions + heartbeat ordering</text>
+<text x="1996" y="469" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Local and discovered peer workers</text>
+<text x="1996" y="502" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Stale / offline / eviction · memory only</text>
+<polyline points="500,435 640,435" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640.00,435.00 625.00,429.00 625.00,441.00" fill="#245EC4"/>
+<text x="570" y="412" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#245EC4">submit</text>
+<polyline points="1200,435 1340,435" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1340.00,435.00 1325.00,429.00 1325.00,441.00" fill="#245EC4"/>
+<polygon points="1200.00,435.00 1215.00,441.00 1215.00,429.00" fill="#245EC4"/>
+<text x="1270" y="402" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#245EC4">evaluate</text>
+<text x="1270" y="476" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#147D77">decision</text>
+<polyline points="1970,435 1830,435" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1830.00,435.00 1845.00,441.00 1845.00,429.00" fill="#7850A8"/>
+<text x="1900" y="412" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">snapshot</text>
+<rect x="80" y="670" width="420" height="190" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="81" y="687" width="5" height="156" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="106" y="713" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Peer task transport</text>
+<text x="106" y="751" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">libp2p streams + JSON envelopes</text>
+<text x="106" y="784" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Noise + trust / group validation</text>
+<text x="106" y="817" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">v2 preferred · v1 fallback</text>
+<text x="106" y="850" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Assignments, cancels, events, results</text>
+<rect x="640" y="670" width="560" height="190" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="687" width="5" height="156" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="666" y="713" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Dispatch + attempt control</text>
+<text x="666" y="751" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Explicit worker or automatic routing</text>
+<text x="666" y="784" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Attempt ID + random token + session</text>
+<text x="666" y="817" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Rejection → cooldown → fresh route</text>
+<text x="666" y="850" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Ambiguous replay: idempotent + budget</text>
+<rect x="1340" y="670" width="490" height="190" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="687" width="5" height="156" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="1366" y="713" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Worker admission</text>
+<text x="1366" y="751" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Accept / reject · bounded wait queue</text>
+<text x="1366" y="784" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Hard concurrent-task permits</text>
+<text x="1366" y="817" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Recheck policy + resources before run</text>
+<text x="1366" y="850" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Used for local AND remote tasks</text>
+<rect x="1970" y="670" width="510" height="190" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1971" y="687" width="5" height="156" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1996" y="713" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Fresh worker state</text>
+<text x="1996" y="751" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Availability policy + CPU/RAM</text>
+<text x="1996" y="784" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Models, capabilities and trust</text>
+<text x="1996" y="817" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Admission counters + resource checks</text>
+<text x="1996" y="850" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Inputs detailed in panel 2</text>
+<polyline points="920,530 920,670" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="920.00,670.00 926.00,655.00 914.00,655.00" fill="#245EC4"/>
+<rect x="744" y="577" width="352" height="37" rx="0" fill="#EAF0F8" stroke="none" stroke-width="0"/>
+<text x="920" y="604" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#245EC4">Claim FIFO head; create attempt</text>
+<polyline points="640,765 500,765" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="500.00,765.00 515.00,771.00 515.00,759.00" fill="#245EC4"/>
+<polygon points="640.00,765.00 625.00,759.00 625.00,771.00" fill="#245EC4"/>
+<text x="570" y="640" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#245EC4">remote</text>
+<polyline points="1200,765 1340,765" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1340.00,765.00 1325.00,759.00 1325.00,771.00" fill="#245EC4"/>
+<text x="1270" y="740" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#245EC4">local</text>
+<polyline points="1970,765 1830,765" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1830.00,765.00 1845.00,771.00 1845.00,759.00" fill="#7850A8"/>
+<text x="1900" y="740" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">recheck</text>
+<polyline points="1585,596 1585,670" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1585.00,670.00 1591.00,655.00 1579.00,655.00" fill="#245EC4"/>
+<text x="1585" y="578" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#245EC4">Incoming peer assignment via same transport</text>
+<rect x="640" y="1050" width="560" height="165" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="1067" width="5" height="131" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="666" y="1093" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Atomic local file store</text>
+<text x="666" y="1131" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Tasks + FIFO + attempts + route history</text>
+<text x="666" y="1164" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Events (JSONL) + results + artifact reads</text>
+<text x="666" y="1197" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Recovery restores work, not live workers</text>
+<rect x="1340" y="1050" width="490" height="165" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="1067" width="5" height="131" rx="2" fill="#245EC4" stroke="none" stroke-width="0"/>
+<text x="1366" y="1093" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Prompt task executor</text>
+<text x="1366" y="1131" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Timeout / cancellation + token events</text>
+<text x="1366" y="1164" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Saves events + result + usage</text>
+<text x="1366" y="1197" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Feeds rolling model throughput</text>
+<rect x="1970" y="1050" width="510" height="165" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1971" y="1067" width="5" height="131" rx="2" fill="#147D77" stroke="none" stroke-width="0"/>
+<text x="1996" y="1093" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">OpenAI-compatible client</text>
+<text x="1996" y="1131" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">POST /v1/chat/completions</text>
+<text x="1996" y="1164" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">GET /v1/models · optional API key</text>
+<text x="1996" y="1197" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Ollama default · HTTP / SSE stream</text>
+<polyline points="920,860 920,1050" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="920.00,1050.00 926.00,1035.00 914.00,1035.00" fill="#7850A8"/>
+<polygon points="920.00,860.00 914.00,875.00 926.00,875.00" fill="#7850A8"/>
+<rect x="768" y="929" width="304" height="37" rx="0" fill="#EAF0F8" stroke="none" stroke-width="0"/>
+<text x="920" y="955" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#7850A8">Queue / attempts / results</text>
+<polyline points="1585,860 1585,1050" fill="none" stroke="#245EC4" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1585.00,1050.00 1591.00,1035.00 1579.00,1035.00" fill="#245EC4"/>
+<rect x="1411" y="929" width="348" height="37" rx="0" fill="#EAF0F8" stroke="none" stroke-width="0"/>
+<text x="1585" y="955" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="middle" fill="#245EC4">Permit held through execution</text>
+<polyline points="1340,1126 1200,1126" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1200.00,1126.00 1215.00,1132.00 1215.00,1120.00" fill="#7850A8"/>
+<text x="1270" y="1088" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">events +</text>
+<text x="1270" y="1172" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">result</text>
+<polyline points="1830,1126 1970,1126" fill="none" stroke="#147D77" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1970.00,1126.00 1955.00,1120.00 1955.00,1132.00" fill="#147D77"/>
+<polygon points="1830.00,1126.00 1845.00,1132.00 1845.00,1120.00" fill="#147D77"/>
+<text x="1900" y="1092" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#147D77">HTTP / SSE</text>
+<text x="85" y="1135" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Peer returns flow back through</text>
+<text x="85" y="1167" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">dispatch → local API → client.</text>
+<text x="85" y="1244" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">The task stream carries remote events and token deltas. MCP/CLI expose stored events; there is no separate active event bus.</text>
+<rect x="50" y="1320" width="2460" height="380" rx="18" fill="#E8F3F1" stroke="#CBD5E1" stroke-width="2"/>
+<text x="78" y="1363" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">02   STATUS AND SCHEDULABILITY FEEDBACK</text>
+<rect x="80" y="1410" width="420" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="81" y="1427" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="106" y="1453" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Availability policy</text>
+<text x="106" y="1491" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Always · manual · schedule · drain</text>
+<text x="106" y="1524" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Idle/login modes fail closed when</text>
+<text x="106" y="1557" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">OS activity provider is unavailable</text>
+<rect x="640" y="1410" width="560" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="1427" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="666" y="1453" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Telemetry + performance</text>
+<text x="666" y="1491" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Platform CPU/RAM collection</text>
+<text x="666" y="1524" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Rolling model token throughput</text>
+<text x="666" y="1557" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Missing / stale metrics stay explicit</text>
+<rect x="1340" y="1410" width="490" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="1427" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1366" y="1453" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Status advertisement</text>
+<text x="1366" y="1491" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Opaque availability + admission stats</text>
+<text x="1366" y="1524" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Resources + models + performance</text>
+<text x="1366" y="1557" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Session ID + monotonic sequence</text>
+<rect x="1970" y="1410" width="510" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1971" y="1427" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1996" y="1453" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Peers → worker registry</text>
+<text x="1996" y="1491" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">worker_hello + worker_status</text>
+<text x="1996" y="1524" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Bounded heartbeat fanout + deadlines</text>
+<text x="1996" y="1557" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Fresh snapshot feeds scheduler above</text>
+<polyline points="1200,1495 1340,1495" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1340.00,1495.00 1325.00,1489.00 1325.00,1501.00" fill="#7850A8"/>
+<text x="1270" y="1470" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">metrics</text>
+<polyline points="1830,1495 1970,1495" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1970.00,1495.00 1955.00,1489.00 1955.00,1501.00" fill="#7850A8"/>
+<text x="1900" y="1470" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">status</text>
+<polyline points="290,1585 290,1647 1585,1647 1585,1585" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1585.00,1585.00 1579.00,1600.00 1591.00,1600.00" fill="#7850A8"/>
+<text x="950" y="1630" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="middle" fill="#7850A8">Opaque policy state; policy also gates worker admission</text>
+<text x="1970" y="1630" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="start" fill="#526278">mDNS discovers addresses;</text>
+<text x="1970" y="1662" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="start" fill="#526278">hello/status builds live registry state.</text>
+<rect x="50" y="1750" width="2460" height="515" rx="18" fill="#F3EEF8" stroke="#CBD5E1" stroke-width="2"/>
+<text x="78" y="1793" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">03   IDENTITY, TRUST AND OPTIONAL ENROLLMENT</text>
+<rect x="80" y="1865" width="420" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="81" y="1882" width="5" height="141" rx="2" fill="#A56815" stroke="none" stroke-width="0"/>
+<text x="106" y="1908" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Applicant daemon</text>
+<text x="106" y="1946" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Invite token + nonce + peer ID</text>
+<text x="106" y="1979" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Authenticated enrollment stream</text>
+<text x="106" y="2012" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Polls request status / decision</text>
+<rect x="640" y="1865" width="560" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="1882" width="5" height="141" rx="2" fill="#A56815" stroke="none" stroke-width="0"/>
+<text x="666" y="1908" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Enrollment manager</text>
+<text x="666" y="1946" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Disabled by default · explicit approval*</text>
+<text x="666" y="1979" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">TTL + source CIDR / rate limits</text>
+<text x="666" y="2012" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Replay protection + safe review metadata</text>
+<rect x="1340" y="1865" width="490" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="1882" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1366" y="1908" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Approved peer trust</text>
+<text x="1366" y="1946" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Atomically persist allowed-peers YAML</text>
+<text x="1366" y="1979" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Apply live identity / trust updates</text>
+<text x="1366" y="2012" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Applicant saves group + coordinator</text>
+<rect x="1970" y="1865" width="510" height="175" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1971" y="1882" width="5" height="141" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1996" y="1908" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Normal peer stream checks</text>
+<text x="1996" y="1946" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Noise authenticates libp2p identity</text>
+<text x="1996" y="1979" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Allowlist + trust authorize work</text>
+<text x="1996" y="2012" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Routing-group hash must also match</text>
+<polyline points="500,1940 640,1940" fill="none" stroke="#A56815" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640.00,1940.00 625.00,1934.00 625.00,1946.00" fill="#A56815"/>
+<polygon points="500.00,1940.00 515.00,1946.00 515.00,1934.00" fill="#A56815"/>
+<text x="570" y="1836" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#A56815">Noise</text>
+<polyline points="1200,1940 1340,1940" fill="none" stroke="#A56815" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1340.00,1940.00 1325.00,1934.00 1325.00,1946.00" fill="#A56815"/>
+<text x="1270" y="1836" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#A56815">approve</text>
+<polyline points="1830,1940 1970,1940" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="1970.00,1940.00 1955.00,1934.00 1955.00,1946.00" fill="#7850A8"/>
+<text x="1900" y="1836" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">authorize</text>
+<rect x="80" y="2140" width="420" height="95" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="81" y="2157" width="5" height="61" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="106" y="2183" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Enrollment state file</text>
+<text x="106" y="2221" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Hashes · requests · replay · audit</text>
+<rect x="640" y="2140" width="560" height="95" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="641" y="2157" width="5" height="61" rx="2" fill="#A56815" stroke="none" stroke-width="0"/>
+<text x="666" y="2183" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Operator → local control API</text>
+<text x="666" y="2221" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">CLI or invoked Hermes/MCP review</text>
+<rect x="1340" y="2140" width="1140" height="95" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="1341" y="2157" width="5" height="61" rx="2" fill="#7850A8" stroke="none" stroke-width="0"/>
+<text x="1366" y="2183" font-family="Segoe UI,Arial,sans-serif" font-size="28" font-weight="600" text-anchor="start" fill="#142438">Startup configuration + local identity files</text>
+<text x="1366" y="2221" font-family="Segoe UI,Arial,sans-serif" font-size="23" font-weight="400" text-anchor="start" fill="#526278">Config YAML · node private key · group hash/key · control token → runtime policies and endpoints</text>
+<polyline points="920,2140 920,2040" fill="none" stroke="#A56815" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="920.00,2040.00 914.00,2055.00 926.00,2055.00" fill="#A56815"/>
+<text x="1058" y="2100" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#A56815">review / decide</text>
+<polyline points="640,1990 560,1990 560,2187 500,2187" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="500.00,2187.00 515.00,2193.00 515.00,2181.00" fill="#7850A8"/>
+<polyline points="2225,2140 2225,2040" fill="none" stroke="#7850A8" stroke-width="3" stroke-linejoin="round" stroke-dasharray="11 8"/>
+<polygon points="2225.00,2040.00 2219.00,2055.00 2231.00,2055.00" fill="#7850A8"/>
+<text x="2334" y="2100" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="400" text-anchor="middle" fill="#7850A8">load</text>
+<text x="85" y="2310" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Cross-cutting: logging → stderr (JSON/text). Embedded schemas define MCP tools/resources and protocol data. OS services start the daemon.</text>
+<text x="85" y="2348" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="400" text-anchor="start" fill="#526278">Current limits: tray binary is a placeholder; GPU/activity providers are not wired; prompt runner returns no generated artifacts. No exactly-once guarantee.</text>
+<text x="85" y="2386" font-family="Segoe UI,Arial,sans-serif" font-size="21" font-weight="400" text-anchor="start" fill="#526278">* Approval is required by default when enrollment is enabled. Group hash is not a credential. No private key or reusable invitation secret is sent in approval.</text>
+</svg>
